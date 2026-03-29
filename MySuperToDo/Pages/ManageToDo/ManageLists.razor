@@ -1,0 +1,164 @@
+@page "/managelists"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.Authorization
+@using MySuperToDo.Application.Interfaces
+@using MySuperToDo.Domain.Entities
+@using MySuperToDo.Domain.Enums
+@using System.Text.Json
+@inject IGunDbService GunDb
+@inject DialogService DialogService
+
+<PageTitle>Manage Lists</PageTitle>
+
+<div class="container-fluid mt-3">
+	<RadzenRow Gap="1rem">
+		<RadzenColumn Size="12">
+			<RadzenCard>
+				<RadzenRow AlignItems="AlignItems.Center" class="mb-3">
+					<RadzenColumn Size="12" SizeMD="6">
+						<RadzenText TextStyle="TextStyle.H6">My Lists</RadzenText>
+					</RadzenColumn>
+					<RadzenColumn Size="12" SizeMD="6" class="text-end">
+						<RadzenButton Text="Add New List"
+									  Icon="add_circle_outline"
+									  ButtonStyle="ButtonStyle.Success"
+									  Click="@AddNewListAsync" />
+					</RadzenColumn>
+				</RadzenRow>
+
+				<RadzenDataGrid @ref="_grid"
+								Data="@_displayLists"
+								TItem="ToDoList"
+								AllowFiltering="true"
+								AllowSorting="true"
+								AllowColumnResize="true"
+								FilterMode="FilterMode.Simple"
+								ColumnWidth="200px">
+					<Columns>
+						<RadzenDataGridColumn TItem="ToDoList"
+											  Title="Actions"
+											  Width="120px"
+											  Filterable="false"
+											  Sortable="false">
+							<Template Context="list">
+								<RadzenButton Icon="edit"
+											  ButtonStyle="ButtonStyle.Light"
+											  Size="ButtonSize.Small"
+											  Click="@(() => EditListAsync(list))"
+											  @onclick:stopPropagation="true"
+											  Disabled="@(list.Name == "All To Do Items")"
+											  title="Edit" />
+								<RadzenButton Icon="delete"
+											  ButtonStyle="ButtonStyle.Danger"
+											  Size="ButtonSize.Small"
+											  Click="@(() => DeleteListAsync(list))"
+											  @onclick:stopPropagation="true"
+											  Disabled="@(list.Name == "All To Do Items")"
+											  title="Delete"
+											  class="ms-1" />
+							</Template>
+						</RadzenDataGridColumn>
+
+						<RadzenDataGridColumn TItem="ToDoList"
+											  Property="Name"
+											  Title="Name"
+											  Width="300px" />
+					</Columns>
+				</RadzenDataGrid>
+
+				@if (_displayLists.Count == 0)
+				{
+					<div class="text-center mt-4 mb-4">
+						<RadzenIcon Icon="list" IconStyle="IconStyle.Secondary" Style="font-size: 48px;" />
+						<RadzenText TextStyle="TextStyle.Subtitle1" class="mt-2">No lists yet — add one to get started.</RadzenText>
+					</div>
+				}
+			</RadzenCard>
+		</RadzenColumn>
+	</RadzenRow>
+</div>
+
+@code {
+	private RadzenDataGrid<ToDoList>? _grid;
+	private IAsyncDisposable? _listsSubscription;
+	private readonly Dictionary<string, ToDoList> _lists = new();
+	// New list instance on every update so RadzenDataGrid detects the change.
+	private List<ToDoList> _displayLists = [];
+
+	protected override async Task OnInitializedAsync()
+	{
+		_listsSubscription = await GunDb.SubscribeMapAsync("lists", OnListReceivedAsync);
+	}
+
+	private Task OnListReceivedAsync(string json, string soul)
+	{
+		try
+		{
+			var list = JsonSerializer.Deserialize<ToDoList>(json);
+			if (list is not null && !string.IsNullOrEmpty(list.Name))
+			{
+				_lists[soul] = list;
+				_displayLists = [.. _lists.Values];
+				_ = InvokeAsync(StateHasChanged);
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.Error.WriteLine($"[ManageLists] Failed to process list: {ex.Message}");
+		}
+		return Task.CompletedTask;
+	}
+
+	private async Task AddNewListAsync()
+	{
+		// Dialog saves to GunDB; subscription above updates the grid reactively.
+		await DialogService.OpenAsync<ToDoListDetail>(
+			"To Do List Detail",
+			null,
+			new DialogOptions { Width = "420px", ShowClose = true, CloseDialogOnOverlayClick = false });
+	}
+
+	private async Task EditListAsync(ToDoList list)
+	{
+		await DialogService.OpenAsync<ToDoListDetail>(
+			"To Do List Detail",
+			new Dictionary<string, object> { { "ExistingList", list } },
+			new DialogOptions { Width = "420px", ShowClose = true, CloseDialogOnOverlayClick = false });
+
+		// Grid updates automatically via OnListReceivedAsync subscription.
+	}
+
+	private async Task DeleteListAsync(ToDoList list)
+	{
+		var confirmed = await DialogService.Confirm(
+			$"Delete list \"{list.Name}\"?",
+			"Delete List",
+			new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+
+		if (confirmed == true)
+		{
+			await GunDb.RemoveAsync($"lists/{list.Id}");
+			var soul = _lists.FirstOrDefault(kv => kv.Value.Id == list.Id).Key;
+			if (soul is not null)
+			{
+				_lists.Remove(soul);
+				_displayLists = [.. _lists.Values];
+				StateHasChanged();
+			}
+		}
+	}
+
+	private static BadgeStyle GetStatusBadgeStyle(ToDoStatus status) => status switch
+	{
+		ToDoStatus.Completed => BadgeStyle.Success,
+		ToDoStatus.InProgress => BadgeStyle.Warning,
+		_ => BadgeStyle.Info
+	};
+
+	public async ValueTask DisposeAsync()
+	{
+		if (_listsSubscription is not null)
+			await _listsSubscription.DisposeAsync();
+	}
+}

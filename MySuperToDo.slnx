@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="MySuperToDo.Application/MySuperToDo.Application.csproj" />
+  <Project Path="MySuperToDo.Domain/MySuperToDo.Domain.csproj" />
+  <Project Path="MySuperToDo.Infrastructure/MySuperToDo.Infrastructure.csproj" />
+  <Project Path="MySuperToDo/MySuperToDo.csproj" />
+</Solution>

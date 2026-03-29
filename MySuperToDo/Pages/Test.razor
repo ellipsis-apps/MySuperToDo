@@ -1,0 +1,23 @@
+@page "/test"
+
+<h1>Simple Test Page</h1>
+
+<p>If you can see this, Blazor is working!</p>
+
+<p>Current time: @DateTime.Now</p>
+
+<button class="btn btn-primary" @onclick="HandleClick">Click Me</button>
+
+@if (clickCount > 0)
+{
+    <p>Button clicked @clickCount time(s)</p>
+}
+
+@code {
+    private int clickCount = 0;
+
+    private void HandleClick()
+    {
+        clickCount++;
+    }
+}

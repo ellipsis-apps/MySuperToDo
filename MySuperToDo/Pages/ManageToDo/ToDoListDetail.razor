@@ -1,0 +1,113 @@
+@using MySuperToDo.Domain.Entities
+@using MySuperToDo.Domain.Enums
+@using MySuperToDo.Application.Interfaces
+@inject DialogService DialogService
+@inject IGunDbService GunDb
+
+<RadzenTemplateForm TItem="ToDoList" Data="@_list" Submit="@OnSubmitAsync">
+    <RadzenStack Gap="1rem">
+
+        <RadzenFormField Text="Name" Variant="Variant.Outlined">
+            <ChildContent>
+                <RadzenTextBox Name="Name"
+                               @bind-Value="@_list.Name"
+                               Placeholder="Enter list name"
+                               Style="width:100%" />
+            </ChildContent>
+        </RadzenFormField>
+        <RadzenRequiredValidator Component="Name" Text="Name is required" />
+
+        <RadzenFormField Text="Urgent?" Variant="Variant.Outlined">
+            <ChildContent>
+                <RadzenRadioButtonList @bind-Value="@_list.IsUrgent"
+                                       TValue="bool"
+                                       Orientation="Orientation.Horizontal">
+                    <Items>
+                        <RadzenRadioButtonListItem Text="No"  Value="false" TValue="bool" />
+                        <RadzenRadioButtonListItem Text="Yes" Value="true"  TValue="bool" />
+                    </Items>
+                </RadzenRadioButtonList>
+            </ChildContent>
+        </RadzenFormField>
+
+        <RadzenFormField Text="Due Date" Variant="Variant.Outlined">
+            <ChildContent>
+                <RadzenDatePicker @bind-Value="@_list.DueDate"
+                                  TValue="DateTime?"
+                                  DateFormat="MM/dd/yyyy"
+                                  Style="width:100%" />
+            </ChildContent>
+        </RadzenFormField>
+
+        @if (_errorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat"
+                         Shade="Shade.Lighter" AllowClose="false">
+                @_errorMessage
+            </RadzenAlert>
+        }
+
+        <RadzenStack Orientation="Orientation.Horizontal"
+                     JustifyContent="JustifyContent.End"
+                     Gap="0.5rem"
+                     class="mt-2">
+            <RadzenButton ButtonType="ButtonType.Submit"
+                          Text="Save"
+                          ButtonStyle="ButtonStyle.Success"
+                          Icon="add_circle_outline"
+                          IsBusy="@_isBusy"
+                          BusyText="Saving..." />
+            <RadzenButton Text="Cancel"
+                          ButtonStyle="ButtonStyle.Light"
+                          Icon="cancel"
+                          Click="@OnCancel"
+                          Disabled="@_isBusy" />
+        </RadzenStack>
+
+    </RadzenStack>
+</RadzenTemplateForm>
+
+@code {
+    private ToDoList _list = new() { IsUrgent = false };
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    [Parameter] public ToDoList? ExistingList { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (ExistingList is not null)
+        {
+            _list = new ToDoList
+            {
+                Id       = ExistingList.Id,
+                Name     = ExistingList.Name,
+                Status   = ExistingList.Status,
+                IsUrgent = ExistingList.IsUrgent,
+                DueDate  = ExistingList.DueDate
+            };
+        }
+    }
+
+    private async Task OnSubmitAsync()
+    {
+        _isBusy = true;
+        _errorMessage = null;
+
+        try
+        {
+            await GunDb.PutAsync($"lists/{_list.Id}", _list);
+            DialogService.Close(_list);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Could not save list: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void OnCancel() => DialogService.Close(null);
+}

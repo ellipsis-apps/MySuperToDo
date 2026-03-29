@@ -1,0 +1,114 @@
+@using Microsoft.JSInterop
+@using MySuperToDo.Application.Interfaces
+@using MySuperToDo.Domain.Entities
+@inject DialogService DialogService
+@inject IGunDbService GunDb
+
+<RadzenStack Gap="1rem">
+    @if (_errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false">
+            @_errorMessage
+        </RadzenAlert>
+    }
+
+    @if (_memberships.Count == 0)
+    {
+        <RadzenText TextStyle="TextStyle.Body2">No other lists available.</RadzenText>
+    }
+    else
+    {
+        @foreach (var entry in _memberships)
+        {
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem">
+                <RadzenCheckBox TValue="bool"
+                                Value="@entry.IsChecked"
+                                Change="@(value => OnMembershipChangedAsync(entry, value))"
+                                Disabled="@_isBusy" />
+                <RadzenText TextStyle="TextStyle.Body1">@entry.ListName</RadzenText>
+            </RadzenStack>
+        }
+    }
+
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End">
+        <RadzenButton Text="Close"
+                      ButtonStyle="ButtonStyle.Light"
+                      Icon="close"
+                      Click="@OnClose"
+                      Disabled="@_isBusy" />
+    </RadzenStack>
+</RadzenStack>
+
+@code {
+    [Parameter] public ToDoItem? Item { get; set; }
+    [Parameter] public List<ToDoList>? Lists { get; set; }
+    [Parameter] public string AllItemsListId { get; set; } = string.Empty;
+
+    private readonly List<ListMembershipEntry> _memberships = [];
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ArgumentNullException.ThrowIfNull(Item);
+
+        _memberships.Clear();
+
+        var candidateLists = (Lists ?? [])
+            .Where(l => !string.Equals(l.Name, "All To Do Items", StringComparison.OrdinalIgnoreCase))
+            .Where(l => string.IsNullOrEmpty(AllItemsListId) || l.Id != AllItemsListId)
+            .OrderBy(l => l.Name)
+            .ToList();
+
+        foreach (var list in candidateLists)
+        {
+            var existing = await GunDb.GetOnceAsync<ToDoItem>($"lists/{list.Id}/items/{Item.Id}");
+            var isChecked = existing is not null && !string.IsNullOrWhiteSpace(existing.Title);
+
+            _memberships.Add(new ListMembershipEntry(list.Id, list.Name, isChecked));
+        }
+    }
+
+    private async Task OnMembershipChangedAsync(ListMembershipEntry entry, bool isChecked)
+    {
+        ArgumentNullException.ThrowIfNull(Item);
+
+        _errorMessage = null;
+        _isBusy = true;
+
+        try
+        {
+            if (isChecked)
+            {
+                await GunDb.PutAsync($"lists/{entry.ListId}/items/{Item.Id}", Item);
+            }
+            else
+            {
+                await GunDb.RemoveAsync($"lists/{entry.ListId}/items/{Item.Id}");
+            }
+
+            entry.IsChecked = isChecked;
+        }
+        catch (JSException ex)
+        {
+            _errorMessage = $"Could not update list membership: {ex.Message}";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _errorMessage = $"Could not update list membership: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void OnClose() => DialogService.Close();
+
+    private sealed class ListMembershipEntry(string listId, string listName, bool isChecked)
+    {
+        public string ListId { get; } = listId;
+        public string ListName { get; } = listName;
+        public bool IsChecked { get; set; } = isChecked;
+    }
+}

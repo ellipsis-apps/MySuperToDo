@@ -1,0 +1,141 @@
+@using MySuperToDo.Domain.Entities
+@using MySuperToDo.Domain.Enums
+@using MySuperToDo.Application.Interfaces
+@inject DialogService DialogService
+@inject IGunDbService GunDb
+
+<RadzenTemplateForm TItem="ToDoItem" Data="@_item" Submit="@OnSubmitAsync">
+    <RadzenStack Gap="1rem">
+
+        <RadzenFormField Text="Title" Variant="Variant.Outlined">
+            <ChildContent>
+                <RadzenTextBox Name="Title"
+                               @bind-Value="@_item.Title"
+                               Placeholder="Enter item title"
+                               Style="width:100%" />
+            </ChildContent>
+        </RadzenFormField>
+        <RadzenRequiredValidator Component="Title" Text="Title is required" />
+
+        <RadzenFormField Text="Priority" Variant="Variant.Outlined">
+            <ChildContent>
+                <RadzenDropDown Name="Priority"
+                                @bind-Value="@_item.Priority"
+                                TValue="Priority"
+                                Data="@_priorities"
+                                Style="width:100%" />
+            </ChildContent>
+        </RadzenFormField>
+
+        <RadzenFormField Text="Urgent?" Variant="Variant.Outlined">
+            <ChildContent>
+                <RadzenRadioButtonList @bind-Value="@_item.IsUrgent"
+                                       TValue="bool"
+                                       Orientation="Orientation.Horizontal">
+                    <Items>
+                        <RadzenRadioButtonListItem Text="No"  Value="false" TValue="bool" />
+                        <RadzenRadioButtonListItem Text="Yes" Value="true"  TValue="bool" />
+                    </Items>
+                </RadzenRadioButtonList>
+            </ChildContent>
+        </RadzenFormField>
+
+        <RadzenFormField Text="Due Date" Variant="Variant.Outlined">
+            <ChildContent>
+                <RadzenDatePicker @bind-Value="@_item.DueDate"
+                                  TValue="DateTime?"
+                                  DateFormat="MM/dd/yyyy"
+                                  Style="width:100%" />
+            </ChildContent>
+        </RadzenFormField>
+
+        <RadzenFormField Text="Status" Variant="Variant.Outlined">
+            <ChildContent>
+                <RadzenDropDown @bind-Value="@_item.Status"
+                                TValue="ToDoStatus"
+                                Data="@_statuses"
+                                Style="width:100%" />
+            </ChildContent>
+        </RadzenFormField>
+
+        @if (_errorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat"
+                         Shade="Shade.Lighter" AllowClose="false">
+                @_errorMessage
+            </RadzenAlert>
+        }
+
+        <RadzenStack Orientation="Orientation.Horizontal"
+                     JustifyContent="JustifyContent.End"
+                     Gap="0.5rem"
+                     class="mt-2">
+            <RadzenButton ButtonType="ButtonType.Submit"
+                          Text="Save"
+                          ButtonStyle="ButtonStyle.Success"
+                          Icon="add_circle_outline"
+                          IsBusy="@_isBusy"
+                          BusyText="Saving..." />
+            <RadzenButton Text="Cancel"
+                          ButtonStyle="ButtonStyle.Light"
+                          Icon="cancel"
+                          Click="@OnCancel"
+                          Disabled="@_isBusy" />
+        </RadzenStack>
+
+    </RadzenStack>
+</RadzenTemplateForm>
+
+@code {
+    private ToDoItem _item = new() { IsUrgent = false, Priority = Priority.Medium };
+    private readonly Priority[]    _priorities = Enum.GetValues<Priority>();
+    private readonly ToDoStatus[]  _statuses   = Enum.GetValues<ToDoStatus>();
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    [Parameter] public string ListId { get; set; } = string.Empty;
+    [Parameter] public string AllItemsListId { get; set; } = string.Empty;
+    [Parameter] public ToDoItem? ExistingItem { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (ExistingItem is not null)
+        {
+            _item = new ToDoItem
+            {
+                Id       = ExistingItem.Id,
+                Title    = ExistingItem.Title,
+                Priority = ExistingItem.Priority,
+                IsUrgent = ExistingItem.IsUrgent,
+                DueDate  = ExistingItem.DueDate,
+                Status   = ExistingItem.Status
+            };
+        }
+    }
+
+    private async Task OnSubmitAsync()
+    {
+        _isBusy = true;
+        _errorMessage = null;
+
+        try
+        {
+            await GunDb.PutAsync($"lists/{ListId}/items/{_item.Id}", _item);
+
+            if (!string.IsNullOrEmpty(AllItemsListId) && AllItemsListId != ListId)
+                await GunDb.PutAsync($"lists/{AllItemsListId}/items/{_item.Id}", _item);
+
+            DialogService.Close(_item);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Could not save item: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void OnCancel() => DialogService.Close(null);
+}
