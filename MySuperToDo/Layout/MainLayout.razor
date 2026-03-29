@@ -1,8 +1,6 @@
 ﻿@using MySuperToDo.Services
 @inject CustomAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
-@implements IDisposable
-
 @inherits LayoutComponentBase
 
 <RadzenLayout Style="min-height: 100vh;">
@@ -22,6 +20,7 @@
 					<span class="profile-label">Profile</span>
 				</ButtonContent>
 				<ChildContent>
+                    <RadzenSplitButtonItem Text="Settings" Value="settings" Icon="settings" Disabled="@(!_isAuthenticated)" />
 					<RadzenSplitButtonItem Text="Logout" Value="logout" Icon="logout" Disabled="@(!_isAuthenticated)" />
 				</ChildContent>
 			</RadzenSplitButton>
@@ -39,39 +38,4 @@
 	</RadzenBody>
 </RadzenLayout>
 <RadzenDialog />
-
-@code {
-	private bool sidebarExpanded = true;
-	private bool _isAuthenticated;
-
-	protected override async Task OnInitializedAsync()
-	{
-		AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
-		var state = await AuthStateProvider.GetAuthenticationStateAsync();
-		_isAuthenticated = state.User.Identity?.IsAuthenticated == true;
-	}
-
-	private void OnAuthStateChanged(Task<AuthenticationState> task)
-	{
-		_ = InvokeAsync(async () =>
-		{
-			var state = await task;
-			_isAuthenticated = state.User.Identity?.IsAuthenticated == true;
-			StateHasChanged();
-		});
-	}
-
-	public void Dispose()
-	{
-		AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
-	}
-
-	private async Task OnProfileMenuItemClick(RadzenSplitButtonItem item)
-	{
-		if (item?.Value == "logout")
-		{
-			await AuthStateProvider.SignOutAsync();
-			Navigation.NavigateTo("/", forceLoad: true);
-		}
-	}
-}
+<RadzenContextMenu />

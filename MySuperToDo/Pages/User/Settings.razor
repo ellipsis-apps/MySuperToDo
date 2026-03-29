@@ -1,0 +1,59 @@
+@page "/user/settings"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@using MySuperToDo.Application.Interfaces
+@using MySuperToDo.Domain.Entities
+@using System.Security.Claims
+@using System.Text.Json
+@inject IGunDbService GunDb
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Settings</PageTitle>
+
+<RadzenCard>
+    <RadzenStack Gap="1rem">
+        <RadzenText TextStyle="TextStyle.H5">User Settings</RadzenText>
+
+        @if (_errorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false">
+                @_errorMessage
+            </RadzenAlert>
+        }
+
+        @if (_settings is null)
+        {
+            <RadzenText TextStyle="TextStyle.Body1">Loading settings...</RadzenText>
+        }
+        else
+        {
+            <RadzenStack Gap="0.75rem">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <RadzenCheckBox TValue="bool"
+                                    Value="@_settings.HideCompletedItems"
+                                    Change="@(value => _settings.HideCompletedItems = value)" />
+                    <RadzenText TextStyle="TextStyle.Body1">Hide completed items</RadzenText>
+                </RadzenStack>
+
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <RadzenCheckBox TValue="bool"
+                                    Value="@_settings.AllItemsCompletedCompletesList"
+                                    Change="@(value => _settings.AllItemsCompletedCompletesList = value)" />
+                    <RadzenText TextStyle="TextStyle.Body1">All items completed completes list</RadzenText>
+                </RadzenStack>
+
+                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
+                    <RadzenButton Text="Save"
+                                  Icon="save"
+                                  ButtonStyle="ButtonStyle.Primary"
+                                  Click="@SaveAsync"
+                                  IsBusy="@_isSaving"
+                                  BusyText="Saving..." />
+                </RadzenStack>
+            </RadzenStack>
+        }
+    </RadzenStack>
+</RadzenCard>

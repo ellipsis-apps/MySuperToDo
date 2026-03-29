@@ -82,6 +82,9 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
 
         if (_callbacks.TryGetValue(path, out var existing))
         {
+            // Stop JS callbacks first, then dispose DotNetObjectReference to avoid
+            // "There is no tracked object" races.
+            await module.InvokeVoidAsync("unsubscribe", path);
             existing.Dispose();
             _callbacks.Remove(path);
         }
@@ -122,13 +125,13 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
     {
         if (!_mapCallbacks.Remove(subscriptionId, out var proxy)) return;
 
-        proxy.Dispose();
-
         if (_module is not null)
         {
             try { await _module.InvokeVoidAsync("unsubscribeMap", subscriptionId); }
             catch (JSDisconnectedException) { }
         }
+
+        proxy.Dispose();
     }
 
     public async Task RemoveAsync(string path, CancellationToken cancellationToken = default)

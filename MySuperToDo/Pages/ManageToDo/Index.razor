@@ -2,352 +2,79 @@
 @attribute [Authorize]
 @implements IAsyncDisposable
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using MySuperToDo.Application.Interfaces
-@using MySuperToDo.Services
 @using MySuperToDo.Domain.Entities
 @using MySuperToDo.Domain.Enums
+@using System.Security.Claims
 @using System.Text.Json
 @inject IGunDbService GunDb
-@inject NavigationManager Navigation
 @inject DialogService DialogService
+@inject ContextMenuService ContextMenuService
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Manage To Do Items</PageTitle>
 
-<div class="container-fluid mt-3">
-    <RadzenRow Gap="1rem">
-        <RadzenColumn Size="12">
-            <RadzenCard>
-                <RadzenRow AlignItems="AlignItems.Center" Gap="0.5rem">
-                    <RadzenColumn Size="12" SizeMD="6">
-                        <h3>@currentListName</h3>
-                    </RadzenColumn>
-                    <RadzenColumn Size="12" SizeMD="6" class="text-end">
-                        <RadzenLabel Text="Select List:" Style="margin-right: 8px;" />
-                        <RadzenDropDown @bind-Value="@selectedListId"
-                                       Data="@_lists.Values"
-                                       TextProperty="Name"
-                                       ValueProperty="Id"
-                                       Change="@OnListChanged"
-                                       Style="width: 250px;" />
-                    </RadzenColumn>
-                </RadzenRow>
-            </RadzenCard>
-        </RadzenColumn>
-    </RadzenRow>
+<RadzenTree Data="@_treeData" Style="height: calc(100vh - 180px);" ItemContextMenu="@OnTreeItemContextMenu">
+    <RadzenTreeLevel TextProperty="Text" ChildrenProperty="Children" Expanded="@(value => (value as TreeNode)?.Expanded ?? false)">
+        <Template Context="treeItem">
+            @{
+                var node = treeItem.Value as TreeNode;
+            }
 
-    <RadzenRow Gap="1rem" class="mt-3">
-        <RadzenColumn Size="12">
-            <RadzenCard>
-                <RadzenRow AlignItems="AlignItems.Center" class="mb-3">
-                    <RadzenColumn Size="12" SizeMD="6">
-                        <RadzenText TextStyle="TextStyle.H6">To Do Items</RadzenText>
-                    </RadzenColumn>
-                    <RadzenColumn Size="12" SizeMD="6" class="text-end">
-                        <RadzenButton Text="Add New Item" 
-                                     Icon="add_circle_outline" 
-                                     ButtonStyle="ButtonStyle.Success" 
-                                     Click="@AddNewItem" />
-                    </RadzenColumn>
-                </RadzenRow>
-
-                <RadzenDataGrid @ref="todoGrid" 
-                               Data="@_displayItems" 
-                               TItem="ToDoItem"
-                               AllowFiltering="true" 
-                               AllowSorting="true"
-                               AllowColumnResize="true"
-                               FilterMode="FilterMode.Simple"
-                               ColumnWidth="200px">
-                    <Columns>
-                        <RadzenDataGridColumn TItem="ToDoItem" 
-                                             Title="Actions" 
-                                             Width="150px" 
-                                             Filterable="false" 
-                                             Sortable="false">
-                            <Template Context="item">
-                                <RadzenButton Icon="list" 
-                                             ButtonStyle="ButtonStyle.Secondary" 
-                                             Size="ButtonSize.Small" 
-                                             Click="@(() => ManageItemListsAsync(item))" 
-                                             @onclick:stopPropagation="true" 
-                                             title="Lists" />
-                                <RadzenButton Icon="edit" 
-                                             ButtonStyle="ButtonStyle.Light" 
-                                             Size="ButtonSize.Small" 
-                                             Click="@(() => EditItem(item))" 
-                                             @onclick:stopPropagation="true" 
-                                             title="Edit"
-                                             class="ms-1" />
-                                <RadzenButton Icon="delete" 
-                                             ButtonStyle="ButtonStyle.Danger" 
-                                             Size="ButtonSize.Small" 
-                                             Click="@(() => DeleteItem(item))" 
-                                             @onclick:stopPropagation="true" 
-                                             title="Delete" 
-                                             class="ms-1" />
-                            </Template>
-                        </RadzenDataGridColumn>
-
-                        <RadzenDataGridColumn TItem="ToDoItem" 
-                                             Property="Title" 
-                                             Title="Title" 
-                                             Width="300px">
-                            <Template Context="item">
-                                <RadzenText TextStyle="@(item.Status == ToDoStatus.Completed ? TextStyle.Overline : TextStyle.Body1)">
-                                    @item.Title
-                                </RadzenText>
-                            </Template>
-                        </RadzenDataGridColumn>
-
-                        <RadzenDataGridColumn TItem="ToDoItem" 
-                                             Property="Priority" 
-                                             Title="Priority" 
-                                             Width="120px">
-                            <Template Context="item">
-                                <RadzenBadge BadgeStyle="@GetPriorityBadgeStyle(item.Priority)" 
-                                            Text="@item.Priority.ToString()" />
-                            </Template>
-                        </RadzenDataGridColumn>
-
-                        <RadzenDataGridColumn TItem="ToDoItem" 
-                                             Property="Status" 
-                                             Title="Status" 
-                                             Width="140px">
-                            <Template Context="item">
-                                <RadzenBadge BadgeStyle="@GetStatusBadgeStyle(item.Status)" 
-                                            Text="@item.Status.ToString()" />
-                            </Template>
-                        </RadzenDataGridColumn>
-
-                        <RadzenDataGridColumn TItem="ToDoItem" 
-                                             Property="IsUrgent" 
-                                             Title="Urgent" 
-                                             Width="100px">
-                            <Template Context="item">
-                                @if (item.IsUrgent)
-                                {
-                                    <RadzenIcon Icon="priority_high" IconStyle="IconStyle.Danger" />
-                                }
-                            </Template>
-                        </RadzenDataGridColumn>
-
-                        <RadzenDataGridColumn TItem="ToDoItem" 
-                                             Property="DueDate" 
-                                             Title="Due Date" 
-                                             Width="150px"
-                                             FormatString="{0:d}">
-                            <Template Context="item">
-                                @if (item.DueDate.HasValue)
-                                {
-                                    var daysUntilDue = (item.DueDate.Value - DateTime.UtcNow).Days;
-                                    var textStyle = daysUntilDue < 0 ? TextStyle.Subtitle2 : TextStyle.Body2;
-                                    var color = daysUntilDue < 0 ? "red" : "inherit";
-                                    
-                                    <RadzenText TextStyle="@textStyle" Style="@($"color: {color}")">
-                                        @item.DueDate.Value.ToShortDateString()
-                                    </RadzenText>
-                                }
-                            </Template>
-                        </RadzenDataGridColumn>
-                    </Columns>
-                </RadzenDataGrid>
-
-                @if (_displayItems.Count == 0)
-                {
-                    <div class="text-center mt-4 mb-4">
-                        <RadzenIcon Icon="inbox" IconStyle="IconStyle.Secondary" Style="font-size: 48px;" />
-                        <RadzenText TextStyle="TextStyle.Subtitle1" class="mt-2">No items in this list</RadzenText>
-                    </div>
-                }
-            </RadzenCard>
-        </RadzenColumn>
-    </RadzenRow>
-</div>
-
-@code {
-    private RadzenDataGrid<ToDoItem>? todoGrid;
-    private IAsyncDisposable? _listsSubscription;
-    private IAsyncDisposable? _itemsSubscription;
-    private readonly Dictionary<string, ToDoItem> _items = new();
-    private List<ToDoItem> _displayItems = [];
-    private readonly Dictionary<string, ToDoList> _lists = new();
-    private string selectedListId = string.Empty;
-    private string currentListName = "All To Do Items";
-    private string _allItemsListId = string.Empty;
-
-    private static string ItemsPath(string listId) => $"lists/{listId}/items";
-
-    protected override async Task OnInitializedAsync()
-    {
-        _listsSubscription = await GunDb.SubscribeMapAsync("lists", OnListReceivedAsync);
-        _ = EnsureAllItemsListAsync();
-    }
-
-    /// <summary>
-    /// Waits briefly for GunDB to deliver any existing lists from localStorage,
-    /// then creates "All To Do Items" if it still has not arrived.
-    /// </summary>
-    private async Task EnsureAllItemsListAsync()
-    {
-        await Task.Delay(1000);
-
-        if (!string.IsNullOrEmpty(_allItemsListId)) return;
-
-        // Check the fixed path before creating — UserAuthService uses the same key.
-        var existing = await GunDb.GetOnceAsync<ToDoList>("lists/all-items");
-        if (existing is not null && !string.IsNullOrEmpty(existing.Name))
-        {
-            _allItemsListId = existing.Id;
-            return;
-        }
-
-        var list = new ToDoList
-        {
-            Id = "all-items",
-            Name = "All To Do Items",
-            Status = ToDoStatus.New,
-            StatusDate = DateTime.UtcNow
-        };
-
-        await GunDb.PutAsync("lists/all-items", list);
-    }
-
-    private async Task OnListReceivedAsync(string json, string soul)
-    {
-        var list = JsonSerializer.Deserialize<ToDoList>(json);
-        if (list is null) return;
-
-        _lists[soul] = list;
-
-        if (list.Name == "All To Do Items" && string.IsNullOrEmpty(_allItemsListId))
-            _allItemsListId = list.Id;
-
-        // Auto-select the first list that arrives
-        if (string.IsNullOrEmpty(selectedListId))
-            await SelectListAsync(list);
-
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task SelectListAsync(ToDoList list)
-    {
-        if (_itemsSubscription is not null)
-        {
-            await _itemsSubscription.DisposeAsync();
-            _itemsSubscription = null;
-        }
-
-        selectedListId = list.Id;
-        currentListName = list.Name;
-        _items.Clear();
-        _displayItems = [];
-
-        _itemsSubscription = await GunDb.SubscribeMapAsync(ItemsPath(selectedListId), OnItemReceivedAsync);
-    }
-
-    private Task OnItemReceivedAsync(string json, string soul)
-    {
-        var item = JsonSerializer.Deserialize<ToDoItem>(json);
-        if (item is not null)
-        {
-            _items[soul] = item;
-            _displayItems = [.. _items.Values];
-            _ = InvokeAsync(StateHasChanged);
-        }
-        return Task.CompletedTask;
-    }
-
-    private async Task OnListChanged()
-    {
-        var list = _lists.Values.FirstOrDefault(l => l.Id == selectedListId);
-        if (list is not null)
-            await SelectListAsync(list);
-    }
-
-    private async Task AddNewItem()
-    {
-        if (string.IsNullOrEmpty(selectedListId)) return;
-
-        await DialogService.OpenAsync<ToDoItemDetail>(
-            "To Do Item Detail",
-            new Dictionary<string, object> { { "ListId", selectedListId }, { "AllItemsListId", _allItemsListId } },
-            new DialogOptions { Width = "480px", ShowClose = true, CloseDialogOnOverlayClick = false });
-
-        // Grid updates automatically via OnItemReceivedAsync subscription.
-    }
-
-    private async Task ManageItemListsAsync(ToDoItem item)
-    {
-        await DialogService.OpenAsync<ToDoListsDialog>(
-            "Item Lists",
-            new Dictionary<string, object>
+            @if (node is not null)
             {
-                { "Item", item },
-                { "Lists", _lists.Values.ToList() },
-                { "AllItemsListId", _allItemsListId }
-            },
-            new DialogOptions { Width = "420px", ShowClose = true, CloseDialogOnOverlayClick = false });
+                var isOverdue = node.DueDate.HasValue && DateTime.UtcNow.Date > node.DueDate.Value.Date;
+                var textColor = isOverdue ? "red" : (node.IsCompleted ? "darkgray" : string.Empty);
 
-        // Reload the current list in case membership changed for this selected list.
-        var selected = _lists.Values.FirstOrDefault(l => l.Id == selectedListId);
-        if (selected is not null)
-            await SelectListAsync(selected);
-    }
+                <span @ondragover="OnDragOver"
+                      @ondragover:preventDefault="true"
+                      @ondrop="@(async _ => await OnDropAsync(node))"
+                      @ondrop:preventDefault="true"
+                      @ondblclick="@(async _ => await OnNodeDoubleClickAsync(node))">
+                    @if (!node.SuppressDragIcon)
+                    {
+                        <span draggable="true"
+                              @ondragstart="@(_ => OnDragStart(node))"
+                              @ondragstart:stopPropagation="true"
+                              style="display:inline-flex;cursor:grab;">
+                            <RadzenIcon Icon="drag_indicator" Style="margin-right: 0.4rem; color: var(--rz-text-tertiary-color, #9aa0a6);" />
+                        </span>
+                    }
 
-    private async Task EditItem(ToDoItem item)
-    {
-        await DialogService.OpenAsync<ToDoItemDetail>(
-            "To Do Item Detail",
-            new Dictionary<string, object>
-            {
-                { "ListId",        selectedListId  },
-                { "AllItemsListId", _allItemsListId },
-                { "ExistingItem",  item             }
-            },
-            new DialogOptions { Width = "480px", ShowClose = true, CloseDialogOnOverlayClick = false });
-
-        // Grid updates automatically via OnItemReceivedAsync subscription.
-    }
-
-    private async Task DeleteItem(ToDoItem item)
-    {
-        var confirmed = await DialogService.Confirm(
-            $"Delete \"{item.Title}\"?", "Delete Item",
-            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
-
-        if (confirmed != true) return;
-
-        await GunDb.RemoveAsync($"{ItemsPath(selectedListId)}/{item.Id}");
-        var soul = _items.FirstOrDefault(kv => kv.Value.Id == item.Id).Key;
-        if (soul is not null)
-        {
-            _items.Remove(soul);
-            _displayItems = [.. _items.Values];
-            StateHasChanged();
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_listsSubscription is not null) await _listsSubscription.DisposeAsync();
-        if (_itemsSubscription is not null) await _itemsSubscription.DisposeAsync();
-    }
-
-    private BadgeStyle GetPriorityBadgeStyle(Priority priority) => priority switch
-    {
-        Priority.High   => BadgeStyle.Danger,
-        Priority.Medium => BadgeStyle.Warning,
-        Priority.Low    => BadgeStyle.Info,
-        _               => BadgeStyle.Secondary
-    };
-
-    private BadgeStyle GetStatusBadgeStyle(ToDoStatus status) => status switch
-    {
-        ToDoStatus.New        => BadgeStyle.Info,
-        ToDoStatus.InProgress => BadgeStyle.Primary,
-        ToDoStatus.Completed  => BadgeStyle.Success,
-        ToDoStatus.Deferred   => BadgeStyle.Warning,
-        ToDoStatus.Canceled   => BadgeStyle.Secondary,
-        _                     => BadgeStyle.Light
-    };
-}
+                    @if (node.IsTodoItem)
+                    {
+                        <RadzenCheckBox TValue="bool"
+                                        Value="@node.IsCompleted"
+                                        Change="@(value => OnTodoItemCheckedChangedAsync(node, value))"
+                                        @onclick:stopPropagation="true"
+                                        @ondblclick:stopPropagation="true"
+                                        Style="margin-right: 0.4rem;" />
+                        @if (node.IsUrgent)
+                        {
+                            <RadzenIcon Icon="priority_high" IconStyle="IconStyle.Danger" Style="margin-right: 0.25rem;" />
+                        }
+                        <span style="@(string.IsNullOrEmpty(textColor) ? string.Empty : $"color:{textColor};")">@node.Text</span>
+                    }
+                    else
+                    {
+                        @if (!string.IsNullOrWhiteSpace(node.Id))
+                        {
+                            <RadzenCheckBox TValue="bool"
+                                            Value="@node.IsCompleted"
+                                            Change="@(value => OnListCheckedChangedAsync(node, value))"
+                                            @onclick:stopPropagation="true"
+                                            @ondblclick:stopPropagation="true"
+                                            Style="margin-right: 0.4rem;" />
+                        }
+                        @if (node.IsUrgent)
+                        {
+                            <RadzenIcon Icon="priority_high" IconStyle="IconStyle.Danger" Style="margin-right: 0.25rem;" />
+                        }
+                        <span style="@(string.IsNullOrEmpty(textColor) ? string.Empty : $"color:{textColor};")">@node.Text</span>
+                    }
+                </span>
+            }
+        </Template>
+    </RadzenTreeLevel>
+</RadzenTree>
