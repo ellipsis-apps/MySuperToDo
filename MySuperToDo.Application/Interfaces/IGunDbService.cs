@@ -6,6 +6,9 @@ namespace MySuperToDo.Application.Interfaces;
 /// </summary>
 public interface IGunDbService
 {
+    /// <summary>Gets whether GunDB is configured with at least one peer.</summary>
+    bool HasPeers { get; }
+
     /// <summary>Merges data at <paramref name="path"/> under the reticle.</summary>
     Task PutAsync(string path, object data, CancellationToken cancellationToken = default);
 

@@ -19,11 +19,14 @@
 
         <RadzenFormField Text="Priority" Variant="Variant.Outlined">
             <ChildContent>
-                <RadzenDropDown Name="Priority"
-                                @bind-Value="@_item.Priority"
-                                TValue="Priority"
-                                Data="@_priorities"
-                                Style="width:100%" />
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <PriorityIcon Priority="@_item.Priority" Style="" />
+                    <RadzenDropDown Name="Priority"
+                                    @bind-Value="@_item.Priority"
+                                    TValue="Priority"
+                                    Data="@_priorities"
+                                    Style="width:100%" />
+                </RadzenStack>
             </ChildContent>
         </RadzenFormField>
 

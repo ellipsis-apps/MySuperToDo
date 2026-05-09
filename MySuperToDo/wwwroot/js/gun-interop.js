@@ -7,6 +7,7 @@
 
 let _gun = null;
 let _reticle = null;
+let _disposed = false;
 
 // Maps path -> { node, dotNetRef } for active .on() subscriptions
 const _subscriptions = new Map();
@@ -22,12 +23,37 @@ function getNode(path) {
     return path.split('/').reduce((node, part) => node.get(part), _reticle);
 }
 
+function invokeDotNetCallback(dotNetRef, callbackMethod, json, soul, errorLabel) {
+    if (_disposed) {
+        return;
+    }
+
+    try {
+        dotNetRef.invokeMethodAsync(callbackMethod, json, soul)
+            .catch(err => {
+                const message = String(err ?? '');
+                if (message.includes('There is no tracked object') || message.includes('already disposed')) {
+                    return;
+                }
+                console.error(errorLabel, err);
+            });
+    }
+    catch (err) {
+        const message = String(err ?? '');
+        if (message.includes('There is no tracked object') || message.includes('already disposed')) {
+            return;
+        }
+        console.error(errorLabel, err);
+    }
+}
+
 /**
  * Initialise the Gun instance and pin the reticle.
  * @param {string[]} peers - Optional relay peer URLs.
  * @param {string}   appScope - Root key used as the reticle (e.g. "mysupertodo").
  */
 export function initialize(peers, appScope) {
+    _disposed = false;
     const opts = {};
     if (peers && peers.length > 0) {
         opts.peers = peers;
@@ -83,8 +109,7 @@ export function subscribe(path, dotNetRef, callbackMethod) {
 
     const node = getNode(path).on((data, soul) => {
         if (data != null) {
-            dotNetRef.invokeMethodAsync(callbackMethod, JSON.stringify(data), soul)
-                .catch(err => console.error('[GunDB] callback error:', err));
+            invokeDotNetCallback(dotNetRef, callbackMethod, JSON.stringify(data), soul, '[GunDB] callback error:');
         }
     });
 
@@ -112,8 +137,7 @@ export function subscribeMap(subscriptionId, path, dotNetRef, callbackMethod) {
         // Skip null, non-objects, and GunDB soul-reference objects {#: "soul"}
         if (data == null || typeof data !== 'object' || '#' in data) return;
 
-        dotNetRef.invokeMethodAsync(callbackMethod, JSON.stringify(data), soul)
-            .catch(err => console.error('[GunDB] map callback error:', err));
+        invokeDotNetCallback(dotNetRef, callbackMethod, JSON.stringify(data), soul, '[GunDB] map callback error:');
     });
 
     _mapSubscriptions.set(subscriptionId, { node, dotNetRef });
@@ -147,6 +171,8 @@ export function removeAsync(path) {
  * Called by GunDbService.DisposeAsync().
  */
 export function disposeAll() {
+    _disposed = true;
+
     for (const [, entry] of _subscriptions) {
         entry.node.off();
     }

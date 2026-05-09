@@ -23,6 +23,8 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
     private readonly string[] _peers;
     private readonly string _appScope;
 
+    public bool HasPeers => _peers.Length > 0;
+
     private IJSObjectReference? _module;
     private bool _initialized;
     private bool _disposed;

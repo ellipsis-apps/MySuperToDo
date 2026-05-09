@@ -4,6 +4,11 @@ using Microsoft.JSInterop;
 
 namespace MySuperToDo.Pages.ManageToDo;
 
+/// <summary>
+/// Represents a Blazor component for managing the details of a ToDo list.
+/// This component allows creating or editing a ToDo list, including setting properties like name, status, urgency, and due date.
+/// It integrates with GunDB for data persistence and uses a dialog service for user interaction.
+/// </summary>
 public partial class ToDoListDetail
 {
     private ToDoList _list = new() { IsUrgent = false };
@@ -12,6 +17,10 @@ public partial class ToDoListDetail
 
     [Parameter] public ToDoList? ExistingList { get; set; }
 
+    /// <summary>
+    /// Called when the component's parameters are set.
+    /// If an existing ToDo list is provided via the ExistingList parameter, it initializes the local _list with a copy of its properties.
+    /// </summary>
     protected override void OnParametersSet()
     {
         if (ExistingList is not null)
@@ -27,6 +36,12 @@ public partial class ToDoListDetail
         }
     }
 
+    /// <summary>
+    /// Handles the submission of the ToDo list form asynchronously.
+    /// Attempts to save the list to GunDB and closes the dialog with the saved list on success.
+    /// Sets an error message if saving fails due to InvalidOperationException or JSException.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task OnSubmitAsync()
     {
         _isBusy = true;
@@ -51,5 +66,9 @@ public partial class ToDoListDetail
         }
     }
 
+    /// <summary>
+    /// Handles the cancellation of the ToDo list form.
+    /// Closes the dialog without saving any changes, passing null to indicate cancellation.
+    /// </summary>
     private void OnCancel() => DialogService.Close(null);
 }

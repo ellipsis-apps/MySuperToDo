@@ -1,0 +1,19 @@
+@using MySuperToDo.Domain.Enums
+@using Radzen
+@using Radzen.Blazor
+
+@{
+    var (icon, iconStyle) = Priority switch
+    {
+        Priority.High => ("priority_high",      IconStyle.Danger),
+        Priority.Low  => ("keyboard_arrow_down", IconStyle.Success),
+        _             => ("drag_handle",         IconStyle.Warning)
+    };
+}
+
+<RadzenIcon Icon="@icon" IconStyle="@iconStyle" title="@Priority.ToString()" Style="@Style" />
+
+@code {
+    [Parameter] public Priority Priority { get; set; }
+    [Parameter] public string Style { get; set; } = "margin-right: 0.25rem;";
+}

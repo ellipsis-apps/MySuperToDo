@@ -64,6 +64,18 @@
 											  Property="Name"
 											  Title="Name"
 											  Width="300px" />
+
+						<RadzenDataGridColumn TItem="ToDoList"
+											  Title="Priority"
+											  Width="120px"
+											  Property="Priority"
+											  Filterable="false"
+											  Sortable="true">
+							<Template Context="list">
+								<PriorityIcon Priority="@list.Priority" Style="" />
+								<span class="ms-1">@list.Priority</span>
+							</Template>
+						</RadzenDataGridColumn>
 					</Columns>
 				</RadzenDataGrid>
 
