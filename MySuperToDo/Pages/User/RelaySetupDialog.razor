@@ -1,0 +1,34 @@
+@using MySuperToDo.Application.Interfaces
+@inject IGunDbService GunDb
+@inject Radzen.DialogService DialogService
+
+<RadzenStack Gap="1rem">
+	@if (_errorMessage is not null)
+	{
+		<RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false">
+			@_errorMessage
+		</RadzenAlert>
+	}
+
+	<RadzenText TextStyle="TextStyle.Body1">
+		No relay servers were found. Enter one or more relay URLs below, one per line.
+	</RadzenText>
+
+	<textarea class="form-control"
+			  rows="5"
+			  placeholder="http://your-relay:8765/gun"
+			  @bind="_relayServersText"></textarea>
+
+	<RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
+		<RadzenButton Text="Save"
+					  Icon="save"
+					  ButtonStyle="ButtonStyle.Primary"
+					  Click="@SaveAsync"
+					  IsBusy="@_isSaving"
+					  BusyText="Saving..." />
+		<RadzenButton Text="Cancel"
+					  Icon="close"
+					  ButtonStyle="ButtonStyle.Light"
+					  Click="@Cancel" />
+	</RadzenStack>
+</RadzenStack>

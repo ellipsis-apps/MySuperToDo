@@ -8,7 +8,7 @@
 		<div style="display: flex; align-items: center; width: 100%;">
 			<RadzenSidebarToggle @bind-Expanded="sidebarExpanded" />
 			<span style="flex: 1;"></span>
-         <span class="gun-status @( _hasGunPeers ? "gun-status--online" : "gun-status--offline" )" title="@( _hasGunPeers ? "GunDB peers configured" : "GunDB has no peers configured" )">
+			 <span class="gun-status @( _hasGunPeers ? "gun-status--online" : "gun-status--offline" )" title="@_gunPeersTooltip">
 				<span class="gun-status__dot"></span>
 				<span class="gun-status__text">@( _hasGunPeers ? "GunDB online" : "GunDB local only" )</span>
 			</span>

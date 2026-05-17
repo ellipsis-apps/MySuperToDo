@@ -12,6 +12,7 @@ public partial class MainLayout : LayoutComponentBase, IDisposable
     private bool sidebarExpanded = true;
     private bool _isAuthenticated;
     private bool _hasGunPeers;
+    private string _gunPeersTooltip = "GunDB has no peers configured";
     private string _userDisplayName = "Guest";
     private string _authStatusLabel = "Not signed in";
 
@@ -23,6 +24,9 @@ public partial class MainLayout : LayoutComponentBase, IDisposable
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
         ApplyAuthState(state);
         _hasGunPeers = GunDb.HasPeers;
+        _gunPeersTooltip = _hasGunPeers
+            ? string.Join(Environment.NewLine, GunDb.PeerUrls)
+            : "GunDB has no peers configured";
     }
 
     private void OnAuthStateChanged(Task<AuthenticationState> task)
