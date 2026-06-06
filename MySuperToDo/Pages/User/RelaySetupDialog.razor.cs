@@ -96,8 +96,14 @@ public partial class RelaySetupDialog
                 .ToList();
 
             var user = await GunDb.GetOnceAsync<DomainUser>($"users/{Username}");
+            if (user is null && !string.IsNullOrWhiteSpace(UserId))
+            {
+                user = await ResolveUserFromUsersCollectionAsync();
+            }
+
             if (user is null)
             {
+                _errorMessage = "Could not load the current user settings.";
                 return;
             }
 

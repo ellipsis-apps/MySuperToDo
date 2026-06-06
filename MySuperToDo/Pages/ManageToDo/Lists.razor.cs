@@ -210,7 +210,10 @@ public partial class Lists : IAsyncDisposable
     /// Currently does nothing, as drag over is not customized.
     /// </summary>
     /// <param name="_">The drag event arguments (unused).</param>
-    private static void OnDragOver(DragEventArgs _) { }
+    private static void OnDragOver(DragEventArgs _) 
+    { 
+        // Drag over is handled at the template level with @ondragover:preventDefault="true"
+    }
 
     /// <summary>
     /// Handles the drop operation asynchronously after a drag.
@@ -220,26 +223,213 @@ public partial class Lists : IAsyncDisposable
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task OnDropAsync(TreeNode target)
     {
-        if (_dragNode is null)
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "OnDropAsync called", target?.Text ?? "null");
+
+            if (_dragNode is null)
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", "No drag node, returning");
+                return;
+            }
+
+            var source = _dragNode;
+            _dragNode = null;
+
+            await JSRuntime.InvokeVoidAsync("console.log", $"Dropping {source.Text} onto {target.Text}");
+
+            if (ReferenceEquals(source, target) || (target.SuppressDragIcon && !string.IsNullOrWhiteSpace(target.Id)))
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", "Drop cancelled - same node or invalid target");
+                return;
+            }
+
+            if (source.IsTodoItem)
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", "Item drop - calling HandleItemDropAsync");
+                await HandleItemDropAsync(source, target);
+                RebuildTree();
+                await InvokeAsync(StateHasChanged);
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", "List drop - calling HandleListDropAsync");
+                await HandleListDropAsync(source, target);
+                RebuildTree();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Exception in OnDropAsync", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Handles dropping a ToDo item by prompting the user whether to copy or move.
+    /// </summary>
+    /// <param name="source">The source tree node representing the item.</param>
+    /// <param name="target">The target tree node representing the list.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task HandleItemDropAsync(TreeNode source, TreeNode target)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "DROP EVENT FIRED - Opening dialog");
+
+            var result = await DialogService.OpenAsync<CopyOrMoveDialog>(
+                "Item Action",
+                new Dictionary<string, object>(),
+                new DialogOptions 
+                { 
+                    Width = "400px",
+                    Resizable = false,
+                    Draggable = false
+                });
+
+            await JSRuntime.InvokeVoidAsync("console.log", $"Dialog closed with result: {result}");
+
+            if (result == null)
+            {
+                return;
+            }
+
+            var resultStr = result as string;
+
+            if (resultStr?.Equals("copy", StringComparison.OrdinalIgnoreCase) ?? false)
+            {
+                await CopyTodoItemAsync(source, target);
+            }
+            else if (resultStr?.Equals("move", StringComparison.OrdinalIgnoreCase) ?? false)
+            {
+                await MoveTodoItemAsync(source, target);
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error in HandleItemDropAsync: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error in HandleItemDropAsync: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
+    /// <summary>
+    /// Handles dropping a ToDo list by prompting the user whether to copy or move.
+    /// </summary>
+    /// <param name="source">The source tree node representing the list.</param>
+    /// <param name="target">The target tree node representing the parent list or root.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task HandleListDropAsync(TreeNode source, TreeNode target)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "LIST DROP EVENT FIRED - Opening dialog");
+
+            var result = await DialogService.OpenAsync<CopyOrMoveDialog>(
+                "List Action",
+                new Dictionary<string, object>(),
+                new DialogOptions 
+                { 
+                    Width = "400px",
+                    Resizable = false,
+                    Draggable = false
+                });
+
+            await JSRuntime.InvokeVoidAsync("console.log", $"Dialog closed with result: {result}");
+
+            if (result == null)
+            {
+                return;
+            }
+
+            var resultStr = result as string;
+
+            if (resultStr?.Equals("copy", StringComparison.OrdinalIgnoreCase) ?? false)
+            {
+                await CopyListAsync(source, target);
+            }
+            else if (resultStr?.Equals("move", StringComparison.OrdinalIgnoreCase) ?? false)
+            {
+                await MoveListAsync(source, target);
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error in HandleListDropAsync: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error in HandleListDropAsync: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
+    /// <summary>
+    /// Copies a ToDo list to a different parent list asynchronously.
+    /// Adds a reference to the source list under the target list without removing it from the source.
+    /// </summary>
+    /// <param name="source">The source tree node representing the list to copy.</param>
+    /// <param name="target">The target tree node representing the new parent list.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task CopyListAsync(TreeNode source, TreeNode target)
+    {
+        if (string.IsNullOrWhiteSpace(source.Id))
         {
             return;
         }
-        var source = _dragNode;
-        _dragNode = null;
-        if (ReferenceEquals(source, target) || (target.SuppressDragIcon && !string.IsNullOrWhiteSpace(target.Id)))
+
+        var targetParentId = target.IsTodoItem ? target.ListContextId : target.Id;
+        var isRootDrop = string.IsNullOrWhiteSpace(targetParentId);
+
+        if (!isRootDrop)
+        {
+            // Prevent copying a list to itself or to its descendants
+            if (string.Equals(source.Id, targetParentId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(source.Id, AllItemsListId, StringComparison.OrdinalIgnoreCase)
+                || IsDescendantList(source.Id, targetParentId))
+            {
+                return;
+            }
+        }
+
+        // Add the source list as a child of the target (without removing it from other parents)
+        if (!isRootDrop)
+        {
+            if (!_childListIdsByParentId.TryGetValue(targetParentId!, out var targetChildren))
+            {
+                targetChildren = [];
+                _childListIdsByParentId[targetParentId!] = targetChildren;
+            }
+
+            // Only add if not already a child
+            if (!targetChildren.Contains(source.Id))
+            {
+                targetChildren.Add(source.Id);
+                await GunDb.PutAsync($"{ListChildrenPath(targetParentId!)}/{source.Id}", new ListChildLink { ChildListId = source.Id });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Copies a ToDo item to a different list asynchronously.
+    /// Adds the item to the target list without removing it from the source list in GunDB.
+    /// </summary>
+    /// <param name="source">The source tree node representing the item.</param>
+    /// <param name="target">The target tree node representing the list.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task CopyTodoItemAsync(TreeNode source, TreeNode target)
+    {
+        if (string.IsNullOrWhiteSpace(source.Id) || string.IsNullOrWhiteSpace(source.ListContextId))
         {
             return;
         }
-        if (source.IsTodoItem)
+        var targetListId = target.IsTodoItem ? target.ListContextId : target.Id;
+        if (string.IsNullOrWhiteSpace(targetListId) || string.Equals(source.ListContextId, targetListId, StringComparison.OrdinalIgnoreCase))
         {
-            await MoveTodoItemAsync(source, target);
+            return;
         }
-        else
+        await GunDb.PutAsync($"list-items/{targetListId}/{source.Id}", new ListItemLink { ItemId = source.Id });
+        if (!_itemIdsByListId.TryGetValue(targetListId, out var toSet))
         {
-            await MoveListAsync(source, target);
+            toSet = [];
+            _itemIdsByListId[targetListId] = toSet;
         }
-        RebuildTree();
-        await InvokeAsync(StateHasChanged);
+        toSet.Add(source.Id);
     }
 
     /// <summary>
@@ -416,7 +606,13 @@ public partial class Lists : IAsyncDisposable
     /// </summary>
     private void RebuildTree()
     {
-        var root = new TreeNode { Text = "📋 All Lists", Expanded = true, SuppressDragIcon = true };
+        var root = new TreeNode 
+        { 
+            Text = "📋 All Lists", 
+            Expanded = true, 
+            SuppressDragIcon = true,
+            Children = []  // Root node has children
+        };
         var nestedListIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var childIds in _childListIdsByParentId.Values)
         {
@@ -455,7 +651,8 @@ public partial class Lists : IAsyncDisposable
             IsCompleted = list.Status == ToDoStatus.Completed,
             IsUrgent = list.IsUrgent,
             DueDate = list.DueDate,
-            Priority = list.Priority
+            Priority = list.Priority,
+            Children = []  // Lists have a children collection
         };
         if (_childListIdsByParentId.TryGetValue(list.Id, out var childListIds))
         {
@@ -487,6 +684,7 @@ public partial class Lists : IAsyncDisposable
                     IsUrgent = item.IsUrgent,
                     Priority = item.Priority,
                     DueDate = item.DueDate
+                    // Note: Children is null for items, so no chevron will show
                 });
             }
         }
@@ -962,7 +1160,18 @@ public partial class Lists : IAsyncDisposable
         public bool IsUrgent { get; set; }
         public Priority Priority { get; set; } = Priority.Medium;
         public DateTime? DueDate { get; set; }
-        public List<TreeNode> Children { get; set; } = [];
+
+        /// <summary>
+        /// For lists, contains child lists and items.
+        /// For items, this is null to prevent the expansion chevron from showing.
+        /// </summary>
+        public List<TreeNode>? Children { get; set; }
+
+        /// <summary>
+        /// Gets a value indicating whether this node can be expanded.
+        /// Items (to-do items) cannot be expanded, only lists can.
+        /// </summary>
+        public bool HasChildren => !IsTodoItem && Children?.Count > 0;
     }
     private sealed class ListItemLink
     {

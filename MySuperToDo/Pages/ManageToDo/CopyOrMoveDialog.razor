@@ -1,0 +1,45 @@
+@using Radzen
+@namespace MySuperToDo.Pages.ManageToDo
+
+<div style="padding: 1rem;">
+	<RadzenStack Gap="1rem">
+		<RadzenText TextStyle="TextStyle.Body1">
+			What would you like to do with this item?
+		</RadzenText>
+
+		<RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
+			<RadzenButton Text="Copy"
+						  ButtonStyle="ButtonStyle.Success"
+						  Icon="content_copy"
+						  Click="@OnCopy" />
+			<RadzenButton Text="Move"
+						  ButtonStyle="ButtonStyle.Info"
+						  Icon="arrow_forward"
+						  Click="@OnMove" />
+			<RadzenButton Text="Cancel"
+						  ButtonStyle="ButtonStyle.Light"
+						  Icon="cancel"
+						  Click="@OnCancel" />
+		</RadzenStack>
+	</RadzenStack>
+</div>
+
+@code {
+	[Inject] DialogService DialogService { get; set; } = default!;
+
+	private void OnCopy()
+	{
+		DialogService.Close("copy");
+	}
+
+	private void OnMove()
+	{
+		DialogService.Close("move");
+	}
+
+	private void OnCancel()
+	{
+		DialogService.Close(null);
+	}
+}
+}

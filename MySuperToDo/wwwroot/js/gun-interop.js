@@ -64,6 +64,14 @@ export function initialize(peers, appScope) {
 }
 
 /**
+ * Reinitializes the Gun instance with a new peer list while preserving the app reticle.
+ */
+export function reinitialize(peers, appScope) {
+    disposeAll();
+    initialize(peers, appScope);
+}
+
+/**
  * Merges (put) a JSON-serialised object at the nested path under the reticle.
  */
 export function putAsync(path, jsonData) {

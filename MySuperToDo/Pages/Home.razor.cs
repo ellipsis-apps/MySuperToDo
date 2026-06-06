@@ -15,7 +15,7 @@ public partial class Home
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
         {
-            Navigation.NavigateTo("/allitems", replace: true);
+            Navigation.NavigateTo("/lists", replace: true);
         }
     }
 
@@ -35,7 +35,7 @@ public partial class Home
         }
 
         await AuthStateProvider.SignInAsync(user!.Id, user.Username, user.Email, rememberMe: true);
-        Navigation.NavigateTo("/allitems", replace: true);
+        Navigation.NavigateTo("/lists", replace: true);
     }
 
     private sealed class LoginModel

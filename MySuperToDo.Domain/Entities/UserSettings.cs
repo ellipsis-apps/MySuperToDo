@@ -4,15 +4,19 @@ public class UserSettings
 {
     public bool HideCompletedItems { get; set; } = false;
     public bool AllItemsCompletedCompletesList { get; set; } = true;
-    public List<string> RelayServerUrls { get; set; } = new();
+    public string RelayServerUrls { get; set; } = string.Empty;
 
     public List<string> GetRelayServerUrls()
     {
-        return RelayServerUrls ?? new List<string>();
+        return RelayServerUrls
+            .Split(['\r', '\n', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public void SetRelayServerUrls(List<string> urls)
     {
-        RelayServerUrls = urls ?? new List<string>();
+        RelayServerUrls = string.Join(Environment.NewLine, (urls ?? []).Where(url => !string.IsNullOrWhiteSpace(url)));
     }
 }

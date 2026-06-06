@@ -16,6 +16,7 @@ public partial class Settings
     private string? _settingsId;
     private string? _errorMessage;
     private bool _isSaving;
+    private string _relayServerUrlsText = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -90,6 +91,8 @@ public partial class Settings
             }
 
             _settings = await GunDb.GetOnceAsync<UserSettings>($"user-settings/{_settingsId}") ?? settingsFromDb;
+            _relayServerUrlsText = string.Join(Environment.NewLine, _settings.GetRelayServerUrls());
+            await GunDb.UpdatePeersAsync(_settings.GetRelayServerUrls());
         }
         catch (JSException ex)
         {
@@ -150,7 +153,14 @@ public partial class Settings
 
         try
         {
+            _settings.SetRelayServerUrls(_relayServerUrlsText
+                .Split(['\r', '\n', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(server => !string.IsNullOrWhiteSpace(server))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList());
+
             await GunDb.PutAsync($"user-settings/{_settingsId}", _settings);
+            await GunDb.UpdatePeersAsync(_settings.GetRelayServerUrls());
             Navigation.NavigateTo("/", replace: true);
         }
         catch (JSException ex)

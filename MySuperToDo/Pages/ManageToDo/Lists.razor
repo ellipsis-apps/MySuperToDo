@@ -4,10 +4,6 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using MySuperToDo.Application.Interfaces
-@using MySuperToDo.Domain.Entities
-@using MySuperToDo.Domain.Enums
-@using System.Security.Claims
-@using System.Text.Json
 @inject IGunDbService GunDb
 @inject DialogService DialogService
 @inject ContextMenuService ContextMenuService
@@ -31,7 +27,8 @@
 					  @ondragover:preventDefault="true"
 					  @ondrop="@(async _ => await OnDropAsync(node))"
 					  @ondrop:preventDefault="true"
-					  @ondblclick="@(async _ => await OnNodeDoubleClickAsync(node))">
+					  @ondblclick="@(async _ => await OnNodeDoubleClickAsync(node))"
+					  style="display: flex; align-items: center; width: 100%; padding: 0.25rem 0; cursor: pointer;">
 					@if (!node.SuppressDragIcon)
 					{
 						<span draggable="true"
@@ -62,7 +59,7 @@
 											Change="@(value => OnListCheckedChangedAsync(node, value))"
 											@onclick:stopPropagation="true"
 											@ondblclick:stopPropagation="true"
-											Style="margin-right: 0.4rem;" />
+										Style="margin-right: 0.4rem;" />
 						}
 						<PriorityIcon Priority="@node.Priority" />
 						<span style="@(string.IsNullOrEmpty(textColor) ? string.Empty : $"color:{textColor};")">@node.Text</span>

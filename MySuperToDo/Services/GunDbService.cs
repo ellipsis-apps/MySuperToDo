@@ -1,6 +1,5 @@
 using System.Text.Json;
 
-using Microsoft.Extensions.Configuration;
 using Microsoft.JSInterop;
 
 using MySuperToDo.Application.Interfaces;
@@ -10,9 +9,8 @@ namespace MySuperToDo.Services;
 /// <summary>
 /// JSInterop wrapper around GunDB with a reticle (scoped root node) for app-level data isolation.
 ///
-/// Configuration (wwwroot/appsettings.json or environment overrides):
+/// Configuration:
 ///   GunDB:AppScope  — root key for the reticle, defaults to "mysupertodo"
-///   GunDB:Peers     — JSON array of relay peer URLs, defaults to local-only storage
 ///
 /// The JS module and Gun instance are initialised lazily on the first call,
 /// so no explicit InitializeAsync step is required in consuming components.
@@ -20,11 +18,13 @@ namespace MySuperToDo.Services;
 internal sealed class GunDbService : IGunDbService, IAsyncDisposable
 {
     private readonly IJSRuntime _js;
-    private readonly string[] _peers;
     private readonly string _appScope;
+    private readonly object _gate = new();
+    private string[] _peers = [];
 
     public bool HasPeers => _peers.Length > 0;
     public IReadOnlyList<string> PeerUrls => _peers;
+    public event Action<IReadOnlyList<string>>? PeersChanged;
 
     private IJSObjectReference? _module;
     private bool _initialized;
@@ -36,7 +36,6 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
     public GunDbService(IJSRuntime js, IConfiguration configuration)
     {
         _js = js;
-        _peers = configuration.GetSection("GunDB:Peers").Get<string[]>() ?? [];
         _appScope = configuration["GunDB:AppScope"] ?? "mysupertodo";
     }
 
@@ -52,6 +51,26 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
         }
 
         return _module;
+    }
+
+    public async Task UpdatePeersAsync(IEnumerable<string> peerUrls, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(peerUrls);
+
+        var nextPeers = peerUrls
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        lock (_gate)
+        {
+            _peers = nextPeers;
+        }
+
+        PeersChanged?.Invoke(PeerUrls);
+
+        var module = await GetModuleAsync(cancellationToken);
+        await module.InvokeVoidAsync("reinitialize", cancellationToken, _peers, _appScope);
     }
 
     public async Task PutAsync(string path, object data, CancellationToken cancellationToken = default)
