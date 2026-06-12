@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Readme.md" />
+  </Folder>
   <Project Path="MySuperToDo.Application/MySuperToDo.Application.csproj" />
   <Project Path="MySuperToDo.Domain/MySuperToDo.Domain.csproj" />
   <Project Path="MySuperToDo.Infrastructure/MySuperToDo.Infrastructure.csproj" />
