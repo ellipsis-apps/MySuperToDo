@@ -16,6 +16,8 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
     private static string UserPath(string username)  => $"users/{username}";
     private static string ListPath(string listId)    => $"lists/{listId}";
     private static string AllItemsListPath           => ListPath(AllItemsListKey);
+    private static bool IsCorrupted(User user) =>
+        string.IsNullOrWhiteSpace(user.Username) || string.IsNullOrWhiteSpace(user.PasswordHash);
 
     /// <summary>
     /// Looks up <paramref name="username"/> in GunDB.
@@ -30,6 +32,12 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
         string username, string password, CancellationToken cancellationToken = default)
     {
         var existing = await gun.GetOnceAsync<User>(UserPath(username), cancellationToken);
+
+        if (existing is not null && IsCorrupted(existing))
+        {
+            await CleanupCorruptedUserAsync(username, cancellationToken);
+            existing = null;
+        }
 
         if (existing is not null)
         {
@@ -54,6 +62,11 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
         newUser = await EnsureDefaultListAsync(newUser, cancellationToken);
         await gun.PutAsync(UserPath(username), newUser, cancellationToken);
         return (newUser, null);
+    }
+
+    private async Task CleanupCorruptedUserAsync(string username, CancellationToken cancellationToken)
+    {
+        await gun.RemoveAsync(UserPath(username), cancellationToken);
     }
 
     /// <summary>

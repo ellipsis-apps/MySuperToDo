@@ -5,6 +5,11 @@ using Microsoft.JSInterop;
 
 namespace MySuperToDo.Pages.ManageToDo;
 
+/// <summary>
+/// Represents a Blazor component for managing the details of a ToDo item.
+/// This component allows creating or editing a ToDo item, including setting properties like title, priority, urgency, due date, and status.
+/// It integrates with GunDB for data persistence, ensures the "All To Do Items" list exists, and uses a dialog service for user interaction.
+/// </summary>
 public partial class ToDoItemDetail
 {
     private const string AllItemsListIdFallback = "all-items";
@@ -20,6 +25,10 @@ public partial class ToDoItemDetail
     [Parameter] public string AllItemsListId { get; set; } = string.Empty;
     [Parameter] public ToDoItem? ExistingItem { get; set; }
 
+    /// <summary>
+    /// Called when the component's parameters are set.
+    /// If an existing ToDo item is provided via the ExistingItem parameter, it initializes the local _item with a copy of its properties.
+    /// </summary>
     protected override void OnParametersSet()
     {
         if (ExistingItem is not null)
@@ -36,6 +45,12 @@ public partial class ToDoItemDetail
         }
     }
 
+    /// <summary>
+    /// Handles the submission of the ToDo item form asynchronously.
+    /// Ensures the "All To Do Items" list exists, saves the item to GunDB, and adds it to the specified list and the "All To Do Items" list if applicable.
+    /// Closes the dialog with the saved item on success, or sets an error message on failure.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task OnSubmitAsync()
     {
         _isBusy = true;
@@ -77,6 +92,12 @@ public partial class ToDoItemDetail
         }
     }
 
+    /// <summary>
+    /// Ensures that the "All To Do Items" list exists in GunDB asynchronously.
+    /// Checks if the list already exists; if not, creates it with default properties.
+    /// </summary>
+    /// <param name="allItemsListId">The ID of the "All To Do Items" list.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task EnsureAllItemsListExistsAsync(string allItemsListId)
     {
         var existing = await GunDb.GetOnceAsync<ToDoList>($"lists/{allItemsListId}");
@@ -94,5 +115,9 @@ public partial class ToDoItemDetail
         });
     }
 
+    /// <summary>
+    /// Handles the cancellation of the ToDo item form.
+    /// Closes the dialog without saving any changes, passing null to indicate cancellation.
+    /// </summary>
     private void OnCancel() => DialogService.Close(null);
 }

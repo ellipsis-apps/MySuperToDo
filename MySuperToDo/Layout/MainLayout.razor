@@ -8,6 +8,10 @@
 		<div style="display: flex; align-items: center; width: 100%;">
 			<RadzenSidebarToggle @bind-Expanded="sidebarExpanded" />
 			<span style="flex: 1;"></span>
+			 <span class="gun-status @( _hasGunPeers ? "gun-status--online" : "gun-status--offline" )" title="@_gunPeersTooltip">
+				<span class="gun-status__dot"></span>
+				<span class="gun-status__text">@( _hasGunPeers ? "GunDB online" : "GunDB local only" )</span>
+			</span>
 			<RadzenLink Path="https://learn.microsoft.com/aspnet/core/" Target="_blank" Text="About" Style="margin-right: 1rem;" />
 			<RadzenSplitButton AlwaysOpenPopup="true"
 							   ButtonStyle="ButtonStyle.Light"
@@ -17,11 +21,19 @@
 					<span class="user-avatar">
 						<RadzenIcon Icon="person" />
 					</span>
-					<span class="profile-label">Profile</span>
+                  <span class="profile-label">@_userDisplayName</span>
 				</ButtonContent>
 				<ChildContent>
-                    <RadzenSplitButtonItem Text="Settings" Value="settings" Icon="settings" Disabled="@(!_isAuthenticated)" />
-					<RadzenSplitButtonItem Text="Logout" Value="logout" Icon="logout" Disabled="@(!_isAuthenticated)" />
+                  <RadzenSplitButtonItem Text="@_authStatusLabel" Disabled="true" />
+                  @if (_isAuthenticated)
+					{
+						<RadzenSplitButtonItem Text="Settings" Value="settings" Icon="settings" />
+						<RadzenSplitButtonItem Text="Logout" Value="logout" Icon="logout" />
+					}
+					else
+					{
+						<RadzenSplitButtonItem Text="Sign In" Value="signin" Icon="login" />
+					}
 				</ChildContent>
 			</RadzenSplitButton>
 		</div>

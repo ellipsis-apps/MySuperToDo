@@ -9,6 +9,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Pages\ManageToDo\ManageLists.razor.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="Pages\ManageToDo\ManageLists.razor" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MySuperToDo.Application\MySuperToDo.Application.csproj" />
     <ProjectReference Include="..\MySuperToDo.Infrastructure\MySuperToDo.Infrastructure.csproj" />
   </ItemGroup>
@@ -19,6 +27,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.5" PrivateAssets="all" />
+    <PackageReference Include="PublishSPAforGitHubPages.Build" Version="3.0.3" />
     <PackageReference Include="Radzen.Blazor" Version="5.5.0" />
     <PackageReference Include="System.Linq.Dynamic.Core" Version="1.7.1" />
   </ItemGroup>

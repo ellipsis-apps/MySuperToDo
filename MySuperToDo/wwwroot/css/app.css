@@ -2,9 +2,9 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
-/* Shrink the Radzen sidebar to ~60% of its default 250px width */
+/* Keep the Radzen sidebar narrow, but wide enough for menu text in Firefox */
 :root {
-    --rz-sidebar-width: 150px;
+    --rz-sidebar-width: 190px;
 }
 
 h1:focus {
@@ -27,6 +27,57 @@ a, .btn-link {
 
 .content {
     padding-top: 1.1rem;
+}
+
+/* Firefox is stricter about flex item shrinking; keep the header controls from overlapping. */
+.rz-header .rz-header-main {
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.rz-header .rz-header-main > * {
+    flex-shrink: 0;
+}
+
+.gun-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-right: 1rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.profile-label {
+    white-space: nowrap;
+}
+
+.gun-status__dot {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background-color: #6c757d;
+}
+
+.gun-status--online {
+    color: #0f5132;
+    background-color: #d1e7dd;
+}
+
+.gun-status--online .gun-status__dot {
+    background-color: #198754;
+}
+
+.gun-status--offline {
+    color: #664d03;
+    background-color: #fff3cd;
+}
+
+.gun-status--offline .gun-status__dot {
+    background-color: #ffc107;
 }
 
 .valid.modified:not([type=checkbox]) {

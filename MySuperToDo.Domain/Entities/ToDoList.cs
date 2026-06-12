@@ -13,6 +13,7 @@ public class ToDoList
 	public List<ToDoList>? Lists { get; set; }
 	public List<ToDoItem>? Items { get; set; }
 	public bool IsUrgent { get; set; } = false;
+	public Priority Priority { get; set; } = Priority.Medium;
 	public DateTime? DueDate { get; set; }
 	public DateTime StatusDate { get; set; } = DateTime.UtcNow;
 

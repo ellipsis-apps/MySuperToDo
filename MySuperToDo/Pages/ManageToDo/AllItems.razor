@@ -1,0 +1,58 @@
+@page "/allitems"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using MySuperToDo.Application.Interfaces
+@using MySuperToDo.Domain.Entities
+@using MySuperToDo.Domain.Enums 
+@using System.Security.Claims
+@using System.Text.Json
+@inject IGunDbService GunDb
+@inject DialogService DialogService
+@inject ContextMenuService ContextMenuService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Manage To Do Items</PageTitle>
+
+<RadzenTree Data="@_treeData" Style="height: calc(100vh - 180px);" ItemContextMenu="@OnTreeItemContextMenu">
+    <RadzenTreeLevel TextProperty="Text" ChildrenProperty="Children" Expanded="@(value => (value as TreeNode)?.Expanded ?? false)">
+        <Template Context="treeItem">
+            @{
+                var node = treeItem.Value as TreeNode;
+            }
+            @if (node is not null)
+            {
+                var isOverdue = node.DueDate.HasValue && DateTime.UtcNow.Date > node.DueDate.Value.Date;
+                var textColor = isOverdue ? "red" : (node.IsCompleted ? "darkgray" : string.Empty);
+                <span @ondblclick="@(async _ => await OnNodeDoubleClickAsync(node))">
+                    @if (node.IsTodoItem)
+                    {
+                        <RadzenCheckBox TValue="bool"
+                            Value="@node.IsCompleted"
+                            Change="@(async value => await OnTodoItemCheckedChangedAsync(node, value))"
+                            @onclick:stopPropagation="true"
+                            @ondblclick:stopPropagation="true"
+                            Style="margin-right: 0.4rem;" />
+                        <PriorityIcon Priority="@node.Priority" />
+                        <span style="@(string.IsNullOrEmpty(textColor) ? string.Empty : $"color:{textColor};")">@node.Text</span>
+                    }
+                    else
+                    {
+                        @if (!string.IsNullOrWhiteSpace(node.Id))
+                        {
+                            <RadzenCheckBox TValue="bool"
+                                Value="@node.IsCompleted"
+                                Change="@(async value => await OnListCheckedChangedAsync(node, value))"
+                                @onclick:stopPropagation="true"
+                                @ondblclick:stopPropagation="true"
+                                Style="margin-right: 0.4rem;" />
+                        }
+                        <PriorityIcon Priority="@node.Priority" />
+                        <span style="@(string.IsNullOrEmpty(textColor) ? string.Empty : $"color:{textColor};")">@node.Text</span>
+                    }
+                </span>
+            }
+        </Template>
+    </RadzenTreeLevel>
+</RadzenTree>

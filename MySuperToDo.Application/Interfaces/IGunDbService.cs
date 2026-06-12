@@ -6,6 +6,18 @@ namespace MySuperToDo.Application.Interfaces;
 /// </summary>
 public interface IGunDbService
 {
+    /// <summary>Gets whether GunDB is configured with at least one peer.</summary>
+    bool HasPeers { get; }
+
+    /// <summary>Gets the configured GunDB peer URLs.</summary>
+    IReadOnlyList<string> PeerUrls { get; }
+
+    /// <summary>Raised when the configured GunDB peers change.</summary>
+    event Action<IReadOnlyList<string>>? PeersChanged;
+
+    /// <summary>Updates the active GunDB peers and refreshes the JS runtime connection.</summary>
+    Task UpdatePeersAsync(IEnumerable<string> peerUrls, CancellationToken cancellationToken = default);
+
     /// <summary>Merges data at <paramref name="path"/> under the reticle.</summary>
     Task PutAsync(string path, object data, CancellationToken cancellationToken = default);
 
