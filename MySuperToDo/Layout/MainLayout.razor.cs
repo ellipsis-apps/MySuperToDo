@@ -99,7 +99,7 @@ public partial class MainLayout : LayoutComponentBase, IDisposable
     public void Dispose()
     {
         AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
-        GunDb.PeersChanged -= OnPeersChanged;
+        GunDb.PeersChanged -= OnPeersChanged;  
     }
 
     private async Task OnProfileMenuItemClick(RadzenSplitButtonItem item)
