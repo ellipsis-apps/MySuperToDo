@@ -106,16 +106,16 @@ public partial class MainLayout : LayoutComponentBase, IDisposable
     {
         if (item?.Value == "settings")
         {
-            Navigation.NavigateTo("/user/settings");
+            Navigation.NavigateTo($"{Navigation.BaseUri}/user/settings");
         }
         else if (item?.Value == "signin")
         {
-            Navigation.NavigateTo("/");
+            Navigation.NavigateTo($"{Navigation.BaseUri}");
         }
         else if (item?.Value == "logout")
         {
             await AuthStateProvider.SignOutAsync();
-            Navigation.NavigateTo("/", forceLoad: true);
+            Navigation.NavigateTo($"{Navigation.BaseUri}", forceLoad: true);
         }
     }
 }

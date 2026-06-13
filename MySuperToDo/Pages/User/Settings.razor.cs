@@ -34,7 +34,7 @@ public partial class Settings
 
             if (principal.Identity?.IsAuthenticated != true)
             {
-                Navigation.NavigateTo("/", replace: true);
+                Navigation.NavigateTo($"{Navigation.BaseUri}", replace: true);
                 return;
             }
 
@@ -161,7 +161,7 @@ public partial class Settings
 
             await GunDb.PutAsync($"user-settings/{_settingsId}", _settings);
             await GunDb.UpdatePeersAsync(_settings.GetRelayServerUrls());
-            Navigation.NavigateTo("/", replace: true);
+            Navigation.NavigateTo($"{Navigation.BaseUri}", replace: true);
         }
         catch (JSException ex)
         {
