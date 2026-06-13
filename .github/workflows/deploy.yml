@@ -1,0 +1,42 @@
+name: Deploy MySuperToDo
+
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Publish Blazor WASM
+      run: dotnet publish MySuperToDo/MySuperToDo.csproj -c Release -o build
+
+    - name: Fix base href for GitHub Pages
+      run: |
+        sed -i 's/<base href="\/" \/>/<base href="\/MySuperToDo\/" \/>/' build/wwwroot/index.html
+
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: build/wwwroot
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+    - name: Deploy to GitHub Pages
+      uses: actions/deploy-pages@v4
