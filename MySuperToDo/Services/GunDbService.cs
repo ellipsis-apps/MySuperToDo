@@ -70,6 +70,11 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
         PeersChanged?.Invoke(PeerUrls);
 
         var module = await GetModuleAsync(cancellationToken);
+
+        // Log peer updates for diagnostics
+        var peerList = _peers.Length > 0 ? string.Join(", ", _peers) : "(none)";
+        System.Diagnostics.Debug.WriteLine($"[GunDB] UpdatePeersAsync: Peers = {peerList}");
+
         await module.InvokeVoidAsync("reinitialize", cancellationToken, _peers, _appScope);
     }
 
@@ -77,6 +82,7 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var module = await GetModuleAsync(cancellationToken);
+        System.Diagnostics.Debug.WriteLine($"[GunDB] PutAsync: {path}");
         await module.InvokeAsync<bool>("putAsync", cancellationToken, path, JsonSerializer.Serialize(data));
     }
 
@@ -84,6 +90,7 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var module = await GetModuleAsync(cancellationToken);
+        System.Diagnostics.Debug.WriteLine($"[GunDB] SetAsync: {path}");
         await module.InvokeAsync<bool>("setAsync", cancellationToken, path, JsonSerializer.Serialize(data));
     }
 

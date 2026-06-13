@@ -116,6 +116,10 @@ public partial class RelaySetupDialog
             await GunDb.PutAsync($"user-settings/{settingsId}", settings);
             DialogService.Close(true);
         }
+        catch (ArgumentException ex) when (ex.Message.Contains("same protocol"))
+        {
+            _errorMessage = ex.Message;
+        }
         catch (JSException ex)
         {
             _errorMessage = $"Could not save relay servers: {ex.Message}";

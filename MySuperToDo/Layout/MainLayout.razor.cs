@@ -73,18 +73,58 @@ public partial class MainLayout : LayoutComponentBase, IDisposable
             return;
         }
 
-        var user = await GunDb.GetOnceAsync<User>($"users/{username}");
-        if (user is null || string.IsNullOrWhiteSpace(user.UserSettingsId))
+        try
         {
-            await GunDb.UpdatePeersAsync([]);
-            UpdatePeerState([]);
-            return;
+            // Use retries to handle transient failures during initial peer setup.
+            // This resolves a circular dependency: peers are needed to read user settings,
+            // but user settings contain the peer URLs. We retry to give the first read a chance.
+            var user = await RetryGetAsync<User>($"users/{username}", maxAttempts: 3);
+            if (user is null || string.IsNullOrWhiteSpace(user.UserSettingsId))
+            {
+                // User data not yet available, but don't clear peers.
+                // This allows authenticated users to work with existing peer configuration.
+                return;
+            }
+
+            var settings = await RetryGetAsync<UserSettings>(
+                $"user-settings/{user.UserSettingsId}", maxAttempts: 3);
+            var peerUrls = settings?.GetRelayServerUrls() ?? [];
+            await GunDb.UpdatePeersAsync(peerUrls);
+            UpdatePeerState(peerUrls);
+        }
+        catch (Exception ex)
+        {
+            // Log but don't crash on peer loading failures.
+            // The user can still interact with existing data.
+            System.Diagnostics.Debug.WriteLine($"[MainLayout] Failed to load peers: {ex.Message}");
+        }
+    }
+
+    private async Task<T?> RetryGetAsync<T>(string path, int maxAttempts = 3) where T : class
+    {
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var result = await GunDb.GetOnceAsync<T>(path);
+                if (result is not null)
+                {
+                    return result;
+                }
+            }
+            catch
+            {
+                // Ignore and retry
+            }
+
+            if (attempt < maxAttempts)
+            {
+                // Exponential backoff: 100ms, 200ms, etc.
+                await Task.Delay(100 * attempt);
+            }
         }
 
-        var settings = await GunDb.GetOnceAsync<UserSettings>($"user-settings/{user.UserSettingsId}");
-        var peerUrls = settings?.GetRelayServerUrls() ?? [];
-        await GunDb.UpdatePeersAsync(peerUrls);
-        UpdatePeerState(peerUrls);
+        return null;
     }
 
     private void ApplyAuthState(AuthenticationState state)
