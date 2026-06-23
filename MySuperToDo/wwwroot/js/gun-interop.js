@@ -51,24 +51,56 @@ function invokeDotNetCallback(dotNetRef, callbackMethod, json, soul, errorLabel)
  * Initialise the Gun instance and pin the reticle.
  * @param {string[]} peers - Optional relay peer URLs.
  * @param {string}   appScope - Root key used as the reticle (e.g. "mysupertodo").
+ * @param {string}   seed - Optional seed for deterministic user identity.
  */
-export function initialize(peers, appScope) {
+export function initialize(peers, appScope, seed) {
     _disposed = false;
     const opts = {};
     if (peers && peers.length > 0) {
         opts.peers = peers;
     }
+
+    // Initialize Gun with IndexedDB (default storage)
     _gun = Gun(opts);
-    // The reticle: every operation in this wrapper is anchored to this node.
     _reticle = _gun.get(appScope);
+
+    // If a seed is provided, authenticate with a deterministic username/password
+    // Gun derives keys from the username and password combination using bcrypt,
+    // so the same seed always produces the same Gun identity (same public/private keys).
+    if (seed && seed.length > 0) {
+        var gunUser = _gun.user();
+        // Use fixed username with seed as password
+        // This ensures the same seed always produces the same Gun keys
+        gunUser.auth('seed_user', seed, function(ack) {
+            if (ack.err) {
+                console.log('[GunDB] Auth error (may be expected on first use):', ack.err);
+                // On first use, we need to create the account
+                gunUser.create('seed_user', seed, function(ack2) {
+                    if (ack2.err) {
+                        console.log('[GunDB] Create error:', ack2.err);
+                    } else {
+                        console.log('[GunDB] User created and authenticated with seed');
+                    }
+                });
+            } else {
+                console.log('[GunDB] User authenticated with seed');
+            }
+        });
+    }
+
+    // Signal that initialization is complete
+    console.log('[GunDB] initialized with appScope:', appScope, 'seed provided:', !!seed);
 }
 
 /**
  * Reinitializes the Gun instance with a new peer list while preserving the app reticle.
+ * @param {string[]} peers - Optional relay peer URLs.
+ * @param {string}   appScope - Root key used as the reticle.
+ * @param {string}   seed - Optional seed for deterministic user identity.
  */
-export function reinitialize(peers, appScope) {
+export function reinitialize(peers, appScope, seed) {
     disposeAll();
-    initialize(peers, appScope);
+    initialize(peers, appScope, seed);
 }
 
 /**
@@ -193,4 +225,170 @@ export function disposeAll() {
 
     _gun = null;
     _reticle = null;
+}
+
+// ============================================================================
+// Encrypted Seed Storage in IndexedDB
+// ============================================================================
+
+const SEED_STORE_NAME = 'gundb-seed';
+const SEED_DB_NAME = 'MySuperToDo';
+const SEED_KEY = 'encrypted-seed';
+
+/**
+ * Derives a key from a password using PBKDF2.
+ * @param {string} password - User password
+ * @returns {Promise<CryptoKey>} Derived encryption key
+ */
+async function deriveKeyFromPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+
+    const baseKey = await crypto.subtle.importKey(
+        'raw',
+        data,
+        'PBKDF2',
+        false,
+        ['deriveBits', 'deriveKey']
+    );
+
+    return crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt: encoder.encode('MySuperToDo-salt'), // Fixed salt; in production use random per-seed
+            iterations: 100000,
+            hash: 'SHA-256',
+        },
+        baseKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+/**
+ * Encrypts a seed with a password using AES-GCM.
+ * @param {string} seed - The seed to encrypt
+ * @param {string} password - User password
+ * @returns {Promise<string>} Base64-encoded encrypted data with IV
+ */
+export async function encryptSeed(seed, password) {
+    const key = await deriveKeyFromPassword(password);
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for GCM
+    const encoder = new TextEncoder();
+    const data = encoder.encode(seed);
+
+    const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        data
+    );
+
+    // Combine IV + encrypted data and return as base64
+    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(encrypted), iv.length);
+
+    return btoa(String.fromCharCode.apply(null, combined));
+}
+
+/**
+ * Decrypts encrypted seed with a password.
+ * @param {string} encryptedData - Base64-encoded encrypted data with IV
+ * @param {string} password - User password
+ * @returns {Promise<string>} Decrypted seed
+ * @throws {Error} If decryption fails (invalid password, corrupted data)
+ */
+export async function decryptSeed(encryptedData, password) {
+    try {
+        const key = await deriveKeyFromPassword(password);
+        const binary = atob(encryptedData);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+
+        const iv = bytes.slice(0, 12);
+        const encrypted = bytes.slice(12);
+
+        const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv },
+            key,
+            encrypted
+        );
+
+        const decoder = new TextDecoder();
+        return decoder.decode(decrypted);
+    } catch (err) {
+        throw new Error('Failed to decrypt seed: invalid password or corrupted data');
+    }
+}
+
+/**
+ * Opens the IndexedDB for seed storage.
+ * @returns {Promise<IDBDatabase>}
+ */
+async function openSeedDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(SEED_DB_NAME, 1);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(SEED_STORE_NAME)) {
+                db.createObjectStore(SEED_STORE_NAME);
+            }
+        };
+    });
+}
+
+/**
+ * Stores encrypted seed in IndexedDB.
+ * @param {string} encryptedSeed - Base64-encoded encrypted seed
+ * @returns {Promise<void>}
+ */
+export async function storeSeedInIndexedDB(encryptedSeed) {
+    const db = await openSeedDatabase();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(SEED_STORE_NAME, 'readwrite');
+        const store = tx.objectStore(SEED_STORE_NAME);
+        const request = store.put(encryptedSeed, SEED_KEY);
+
+        request.onerror = () => reject(request.error);
+        tx.oncomplete = () => resolve();
+    });
+}
+
+/**
+ * Retrieves encrypted seed from IndexedDB.
+ * @returns {Promise<string|null>} Base64-encoded encrypted seed, or null if not found
+ */
+export async function getSeedFromIndexedDB() {
+    const db = await openSeedDatabase();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(SEED_STORE_NAME, 'readonly');
+        const store = tx.objectStore(SEED_STORE_NAME);
+        const request = store.get(SEED_KEY);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || null);
+    });
+}
+
+/**
+ * Removes encrypted seed from IndexedDB.
+ * @returns {Promise<void>}
+ */
+export async function deleteSeedFromIndexedDB() {
+    const db = await openSeedDatabase();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(SEED_STORE_NAME, 'readwrite');
+        const store = tx.objectStore(SEED_STORE_NAME);
+        const request = store.delete(SEED_KEY);
+
+        request.onerror = () => reject(request.error);
+        tx.oncomplete = () => resolve();
+    });
 }

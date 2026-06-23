@@ -1,12 +1,61 @@
-﻿<CascadingAuthenticationState>
-<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
-    <Found Context="routeData">
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
-                <NotAuthorized>
-                    <RedirectToSignIn />
-                </NotAuthorized>
-            </AuthorizeRouteView>
-        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-    </Found>
-</Router>
+﻿@using MySuperToDo.Services
+@inject GunDbSeedService SeedService
+
+<CascadingAuthenticationState>
+    @if (!IsInitialized)
+    {
+        @if (IsCheckingInitialization)
+        {
+            <div class="d-flex justify-content-center align-items-center" style="height: 100vh;">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+            <Found Context="routeData">
+                <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                    <NotAuthorized>
+                        <RedirectToSignIn />
+                    </NotAuthorized>
+                </AuthorizeRouteView>
+                <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+            </Found>
+        </Router>
+    }
 </CascadingAuthenticationState>
+
+@code {
+    private bool IsInitialized;
+    private bool IsCheckingInitialization = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Check if a GunDB seed exists
+            var seedExists = await SeedService.SeedExistsAsync();
+
+            if (!seedExists)
+            {
+                // Redirect to seed initialization
+                // Note: The Router will handle the /seed-initialization route
+            }
+
+            IsInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[App] Error checking GunDB initialization: {ex.Message}");
+            IsInitialized = true; // Still initialize app to avoid blocking
+        }
+        finally
+        {
+            IsCheckingInitialization = false;
+        }
+    }
+}
+

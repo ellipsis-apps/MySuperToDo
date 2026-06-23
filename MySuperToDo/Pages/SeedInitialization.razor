@@ -1,0 +1,269 @@
+@page "/seed-initialization"
+@using MySuperToDo.Services
+@using MySuperToDo.Application.Interfaces
+@inject GunDbSeedService SeedService
+@inject IGunDbService GunDbService
+@inject NavigationManager Navigation
+
+<div class="seed-initialization-container">
+	@switch (CurrentStep)
+	{
+		case InitializationStep.Entry:
+			<SeedEntry OnSeedEntered="@(async args => await HandleSeedEntered(args.seed, args.password, args.isNew))" />
+			break;
+
+		case InitializationStep.PasswordEntry:
+			<!-- Password entry for imported seeds -->
+			<div class="card" style="max-width: 500px; margin: 0 auto; margin-top: 5rem;">
+				<div class="card-body">
+					<h2 class="card-title mb-4">Add Password to Protect Seed</h2>
+					<p class="text-muted small mb-4">Create a password to encrypt your imported seed. You'll need this password each time you open the app.</p>
+
+					<div class="mb-3">
+						<label for="passwordInput" class="form-label">Password</label>
+						<input type="password" class="form-control" id="passwordInput" 
+							   @bind="CurrentPassword" placeholder="Enter a strong password" />
+					</div>
+
+					<div class="mb-3">
+						<label for="passwordConfirmInput" class="form-label">Confirm Password</label>
+						<input type="password" class="form-control" id="passwordConfirmInput" 
+							   @bind="PasswordConfirm" placeholder="Confirm your password" />
+					</div>
+
+					@if (!string.IsNullOrEmpty(ErrorMessage))
+					{
+						<div class="alert alert-danger">@ErrorMessage</div>
+					}
+
+					<button class="btn btn-primary w-100" @onclick="HandlePasswordConfirmed" 
+							disabled="@(!IsPasswordValid())">
+						Continue
+					</button>
+					<button class="btn btn-link w-100" @onclick="() => CurrentStep = InitializationStep.Entry">
+						Back
+					</button>
+				</div>
+			</div>
+			break;
+
+		case InitializationStep.Display:
+			<SeedDisplay Seed="@(CurrentSeed!)" OnConfirmed="@(async () => await HandleSeedDisplayConfirmed())" />
+			break;
+
+		case InitializationStep.Initializing:
+			<div class="initializing-container">
+				<div class="spinner-border" role="status">
+					<span class="visually-hidden">Initializing GunDB...</span>
+				</div>
+				<p class="mt-3">Initializing GunDB database...</p>
+			</div>
+			break;
+
+		case InitializationStep.Error:
+			<div class="alert alert-danger" role="alert">
+				<h4 class="alert-heading">Initialization Error</h4>
+				<p>@ErrorMessage</p>
+				<button class="btn btn-primary" @onclick="RetryInitialization">Retry</button>
+			</div>
+			break;
+	}
+</div>
+
+@code {
+	private enum InitializationStep
+	{
+		Entry,
+		PasswordEntry,
+		Display,
+		Initializing,
+		Error,
+		Complete
+	}
+
+	private InitializationStep CurrentStep = InitializationStep.Entry;
+	private string? CurrentSeed;
+	private string? CurrentPassword;
+	private string? PasswordConfirm;
+	private string? ErrorMessage;
+	private bool IsImportingExistingSeed;
+
+	/// <summary>
+	/// Handles when a seed is entered by the user (either new or existing).
+	/// For new seeds, shows display for backup confirmation.
+	/// For existing seeds, prompts for password and initializes directly.
+	/// </summary>
+	private async Task HandleSeedEntered(string seed, string? password, bool isNewSeed)
+	{
+		try
+		{
+			if (!GunDbSeedService.IsValidSeed(seed))
+			{
+				ErrorMessage = "Invalid seed format. Please check and try again.";
+				CurrentStep = InitializationStep.Error;
+				return;
+			}
+
+			CurrentSeed = seed;
+			CurrentPassword = password;
+
+			if (isNewSeed)
+			{
+				// New seed: show for backup, then store with password and initialize
+				CurrentStep = InitializationStep.Display;
+			}
+			else
+			{
+				// Existing seed: prompt for password to encrypt it for storage
+				IsImportingExistingSeed = true;
+				ErrorMessage = null;
+				PasswordConfirm = null;
+				CurrentStep = InitializationStep.PasswordEntry;
+			}
+		}
+		catch (Exception ex)
+		{
+			ErrorMessage = $"Error processing seed: {ex.Message}";
+			CurrentStep = InitializationStep.Error;
+		}
+	}
+
+	/// <summary>
+	/// Handles confirmation from the seed display page for new seeds.
+	/// Stores the encrypted seed and initializes GunDB.
+	/// </summary>
+	private async Task HandleSeedDisplayConfirmed()
+	{
+		if (string.IsNullOrWhiteSpace(CurrentSeed) || string.IsNullOrWhiteSpace(CurrentPassword))
+		{
+			ErrorMessage = "Seed or password missing. Please start over.";
+			CurrentStep = InitializationStep.Error;
+			return;
+		}
+
+		try
+		{
+			// Store the encrypted seed with the password
+			await SeedService.StoreSeedAsync(CurrentSeed, CurrentPassword);
+			CurrentStep = InitializationStep.Initializing;
+			await InitializeGunDbAsync(CurrentSeed, CurrentPassword);
+		}
+		catch (Exception ex)
+		{
+			ErrorMessage = $"Error storing seed: {ex.Message}";
+			CurrentStep = InitializationStep.Error;
+		}
+	}
+
+	/// <summary>
+	/// Initializes GunDB with the provided seed (and optional password for decryption).
+	/// After successful initialization, navigates to the home page.
+	/// </summary>
+	private async Task InitializeGunDbAsync(string seed, string? password = null)
+	{
+		try
+		{
+			// Pass the seed to GunDbService so it can use it for identity derivation
+			GunDbService.SetSeed(seed);
+
+			// Trigger the first operation to initialize the Gun module with the seed
+			// Using a simple GetOnceAsync to ensure Gun is initialized
+			await GunDbService.GetOnceAsync<object>("_init", CancellationToken.None);
+
+			System.Diagnostics.Debug.WriteLine("[SeedInitialization] GunDB initialized with seed");
+
+			await Task.Delay(500); // Brief delay to allow Gun to stabilize
+
+			CurrentStep = InitializationStep.Complete;
+			Navigation.NavigateTo("/");
+		}
+		catch (Exception ex)
+		{
+			ErrorMessage = $"Error initializing GunDB: {ex.Message}";
+			CurrentStep = InitializationStep.Error;
+			System.Diagnostics.Debug.WriteLine($"[SeedInitialization] GunDB initialization failed: {ex.Message}");
+		}
+	}
+
+	/// <summary>
+	/// Retries initialization from the error state.
+	/// </summary>
+	private void RetryInitialization()
+	{
+		CurrentStep = InitializationStep.Entry;
+		CurrentSeed = null;
+		ErrorMessage = null;
+	}
+
+	/// <summary>
+	/// Validates password for importing existing seed.
+	/// </summary>
+	private bool IsPasswordValid()
+	{
+		if (string.IsNullOrWhiteSpace(CurrentPassword) || string.IsNullOrWhiteSpace(PasswordConfirm))
+		{
+			return false;
+		}
+
+		if (CurrentPassword != PasswordConfirm)
+		{
+			return false;
+		}
+
+		return CurrentPassword.Length >= 6; // Minimum 6 characters
+	}
+
+	/// <summary>
+	/// Handles password confirmation for imported seed.
+	/// Stores the encrypted seed and initializes GunDB.
+	/// </summary>
+	private async Task HandlePasswordConfirmed()
+	{
+		ErrorMessage = null;
+
+		if (!IsPasswordValid())
+		{
+			ErrorMessage = "Passwords must match and be at least 6 characters long.";
+			return;
+		}
+
+		if (string.IsNullOrEmpty(CurrentSeed))
+		{
+			ErrorMessage = "Seed is missing. Please start over.";
+			return;
+		}
+
+		try
+		{
+			CurrentStep = InitializationStep.Initializing;
+
+			// Store encrypted seed
+			await SeedService.StoreSeedAsync(CurrentSeed, CurrentPassword!);
+
+			System.Diagnostics.Debug.WriteLine("[SeedInitialization] Encrypted seed stored in IndexedDB");
+
+			// Initialize GunDB with the seed
+			await InitializeGunDbAsync(CurrentSeed, CurrentPassword);
+		}
+		catch (Exception ex)
+		{
+			ErrorMessage = $"Error storing seed: {ex.Message}";
+			CurrentStep = InitializationStep.PasswordEntry;
+			System.Diagnostics.Debug.WriteLine($"[SeedInitialization] Failed to store imported seed: {ex.Message}");
+		}
+	}
+}
+
+<style>
+	.seed-initialization-container {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		min-height: 100vh;
+		padding: 2rem;
+	}
+
+	.initializing-container {
+		text-align: center;
+	}
+</style>

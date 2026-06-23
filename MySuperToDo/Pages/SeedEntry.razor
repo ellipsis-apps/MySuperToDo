@@ -1,0 +1,188 @@
+@using MySuperToDo.Services
+
+<div class="seed-entry-card">
+	<div class="card">
+		<div class="card-body">
+			<h2 class="card-title mb-4">GunDB Database Initialization</h2>
+
+			@if (ShowNewSeedOption)
+			{
+				<div class="btn-group w-100 mb-4" role="group">
+					<input type="radio" class="btn-check" name="seedMode" id="seedModeExisting" 
+						   @onchange="@((ChangeEventArgs e) => SetMode(SeedMode.Existing))"
+						   checked="@(CurrentMode == SeedMode.Existing)" />
+					<label class="btn btn-outline-primary" for="seedModeExisting">
+						Use Existing Seed
+					</label>
+
+					<input type="radio" class="btn-check" name="seedMode" id="seedModeNew" 
+						   @onchange="@((ChangeEventArgs e) => SetMode(SeedMode.New))" />
+					<label class="btn btn-outline-primary" for="seedModeNew">
+						Create New Seed
+					</label>
+				</div>
+			}
+
+			@if (CurrentMode == SeedMode.New && !ShowPasswordEntry)
+			{
+				<NewSeedConfirmation OnConfirmed="@(async () => await HandleNewSeedConfirmed())" />
+			}
+			else if (CurrentMode == SeedMode.New && ShowPasswordEntry)
+			{
+				<div class="password-entry">
+					<p class="text-muted small">Create a password to encrypt your seed. You'll need this password each time you open the app.</p>
+					<div class="mb-3">
+						<label for="passwordInput" class="form-label">Password</label>
+						<input type="password" class="form-control" id="passwordInput" 
+							   @bind="Password" placeholder="Enter a strong password" />
+					</div>
+					<div class="mb-3">
+						<label for="passwordConfirmInput" class="form-label">Confirm Password</label>
+						<input type="password" class="form-control" id="passwordConfirmInput" 
+							   @bind="PasswordConfirm" placeholder="Confirm your password" />
+					</div>
+					@if (!string.IsNullOrEmpty(PasswordError))
+					{
+						<div class="alert alert-danger">@PasswordError</div>
+					}
+					<button class="btn btn-primary w-100" @onclick="HandleNewSeedWithPassword" 
+							disabled="@(!IsPasswordValid())">
+						Continue with Password
+					</button>
+					<button class="btn btn-link w-100" @onclick="() => CancelPasswordEntry()">
+						Cancel
+					</button>
+				</div>
+			}
+			else if (CurrentMode == SeedMode.Existing)
+			{
+				<ExistingSeedInput OnSeedEntered="@(async seed => await HandleSeedEntered(seed, false))" />
+			}
+		</div>
+	</div>
+</div>
+
+@code {
+	private enum SeedMode
+	{
+		Existing,
+		New
+	}
+
+	[Parameter]
+	public EventCallback<(string seed, string? password, bool isNew)> OnSeedEntered { get; set; }
+
+	[Inject]
+	private GunDbSeedService SeedService { get; set; } = default!;
+
+	private SeedMode CurrentMode = SeedMode.Existing;
+	private bool ShowNewSeedOption = true;
+	private bool ShowPasswordEntry = false;
+	private string Password = string.Empty;
+	private string PasswordConfirm = string.Empty;
+	private string PasswordError = string.Empty;
+	private string? GeneratedSeed;
+
+	/// <summary>
+	/// Sets the current seed mode (existing or new).
+	/// </summary>
+	private void SetMode(SeedMode mode)
+	{
+		CurrentMode = mode;
+		ShowPasswordEntry = false;
+		PasswordError = string.Empty;
+		Password = string.Empty;
+		PasswordConfirm = string.Empty;
+		GeneratedSeed = null;
+	}
+
+	/// <summary>
+	/// Checks if the password entries are valid and match.
+	/// </summary>
+	private bool IsPasswordValid()
+	{
+		if (string.IsNullOrWhiteSpace(Password) || string.IsNullOrWhiteSpace(PasswordConfirm))
+		{
+			return false;
+		}
+
+		if (Password != PasswordConfirm)
+		{
+			return false;
+		}
+
+		return Password.Length >= 6; // Minimum 6 characters
+	}
+
+	/// <summary>
+	/// Transitions to password entry after user confirms new seed.
+	/// </summary>
+	private async Task HandleNewSeedConfirmed()
+	{
+		ShowPasswordEntry = true;
+		Password = string.Empty;
+		PasswordConfirm = string.Empty;
+		PasswordError = string.Empty;
+		GeneratedSeed = SeedService.GenerateNewSeed();
+		await Task.CompletedTask;
+	}
+
+	/// <summary>
+	/// Cancels password entry and goes back to mode selection.
+	/// </summary>
+	private void CancelPasswordEntry()
+	{
+		ShowPasswordEntry = false;
+		CurrentMode = SeedMode.Existing;
+		PasswordError = string.Empty;
+		Password = string.Empty;
+		PasswordConfirm = string.Empty;
+		GeneratedSeed = null;
+	}
+
+	/// <summary>
+	/// Generates a new seed and emits seed + password for encryption.
+	/// </summary>
+	private async Task HandleNewSeedWithPassword()
+	{
+		PasswordError = string.Empty;
+
+		if (!IsPasswordValid())
+		{
+			PasswordError = "Passwords must match and be at least 6 characters long.";
+			return;
+		}
+
+		if (string.IsNullOrEmpty(GeneratedSeed))
+		{
+			PasswordError = "Seed generation failed. Please try again.";
+			return;
+		}
+
+		// Emit seed with password, marking it as new
+		await OnSeedEntered.InvokeAsync((GeneratedSeed, Password, true));
+	}
+
+	/// <summary>
+	/// Handles when the user enters an existing seed (emits with no password).
+	/// </summary>
+	private async Task HandleSeedEntered(string seed, bool isNewSeed)
+	{
+		await OnSeedEntered.InvokeAsync((seed, null, false));
+	}
+}
+
+<style>
+	.seed-entry-card {
+		max-width: 500px;
+		margin: 0 auto;
+	}
+
+	.card {
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+	}
+
+	.btn-group {
+		margin-bottom: 1.5rem;
+	}
+</style>

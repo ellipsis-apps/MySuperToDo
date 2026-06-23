@@ -3,6 +3,11 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
+using Radzen;
+using MySuperToDo.Application.Interfaces;
+using MySuperToDo.Domain.Entities;
+using MySuperToDo.Domain.Enums;
+using MySuperToDo.Services;
 using Microsoft.JSInterop;
 using Radzen;
 using MySuperToDo.Application.Interfaces;
@@ -19,6 +24,7 @@ namespace MySuperToDo.Pages.ManageToDo;
 public partial class AllItems : IAsyncDisposable
 {
     [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
+    [Inject] public GunDbSeedService GunDbSeedService { get; set; } = default!;
     private IAsyncDisposable? _listsSubscription;
     private IAsyncDisposable? _allItemsEnforcementSubscription;
     private readonly Dictionary<string, IAsyncDisposable> _listMembershipSubscriptions = new();
@@ -807,6 +813,12 @@ public partial class AllItems : IAsyncDisposable
     /// Clears all data stored in IndexedDB and reloads the page to reinitialize the app.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
+    /// <summary>
+    /// Deletes the entire GunDB database asynchronously.
+    /// Shows a confirmation dialog and clears all seed and IndexedDB data.
+    /// After deletion, reloads the page to reinitialize the app.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task DeleteGunDBDatabaseAsync()
     {
         var confirmed = await DialogService.Confirm(
@@ -821,14 +833,9 @@ public partial class AllItems : IAsyncDisposable
 
         try
         {
-            await JSRuntime.InvokeVoidAsync("eval", @"
-                new Promise((resolve, reject) => {
-                    const deleteRequest = indexedDB.deleteDatabase('gun');
-                    deleteRequest.onsuccess = () => resolve();
-                    deleteRequest.onerror = () => reject(deleteRequest.error);
-                    deleteRequest.onblocked = () => reject('Database deletion blocked');
-                }).then(() => location.reload()).catch(err => console.error('Failed to delete GunDB database:', err));
-            ");
+            await GunDbSeedService.DeleteAllAsync();
+            // Reload the page to reinitialize after deletion
+            await JSRuntime.InvokeVoidAsync("location.reload");
         }
         catch (Exception ex)
         {

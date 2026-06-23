@@ -1,0 +1,157 @@
+@using MySuperToDo.Services
+@using MySuperToDo.Application.Interfaces
+@inject GunDbSeedService SeedService
+@inject IGunDbService GunDbService
+@inject NavigationManager Navigation
+
+@if (GunDbInitialized)
+{
+	<!-- GunDB initialized with seed - show authenticated app router -->
+	<CascadingAuthenticationState>
+		<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+			<Found Context="routeData">
+				<AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+					<NotAuthorized>
+						<RedirectToSignIn />
+					</NotAuthorized>
+				</AuthorizeRouteView>
+				<FocusOnNavigate RouteData="@routeData" Selector="h1" />
+			</Found>
+		</Router>
+	</CascadingAuthenticationState>
+}
+else if (ShowSeedInitialization)
+{
+	<!-- No seed exists - show seed initialization flow (WITHOUT authentication) -->
+	<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+		<Found Context="routeData">
+			<RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+			<FocusOnNavigate RouteData="@routeData" Selector="h1" />
+		</Found>
+	</Router>
+}
+else if (IsCheckingInitialization)
+{
+	<!-- Loading state -->
+	<div class="d-flex justify-content-center align-items-center" style="height: 100vh;">
+		<div class="spinner-border" role="status">
+			<span class="visually-hidden">Loading...</span>
+		</div>
+	</div>
+}
+else if (SeedExists && !SeedUnlocked)
+{
+	<!-- Seed exists but not unlocked - show password prompt -->
+	<PasswordPrompt @ref="PasswordPromptRef"
+				   OnPasswordEntered="@(async password => await HandlePasswordEntered(password))"
+				   OnStartFresh="@(async () => await HandleStartFresh())" />
+}
+
+@code {
+	private PasswordPrompt? PasswordPromptRef;
+	private bool GunDbInitialized;
+	private bool ShowSeedInitialization;
+	private bool IsCheckingInitialization = true;
+	private bool SeedExists;
+	private bool SeedUnlocked;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			System.Diagnostics.Debug.WriteLine("[App] OnInitializedAsync: Checking for encrypted seed");
+
+			// Check if an encrypted seed exists
+			SeedExists = await SeedService.SeedExistsAsync();
+
+			System.Diagnostics.Debug.WriteLine($"[App] OnInitializedAsync: SeedExists = {SeedExists}");
+
+			if (!SeedExists)
+			{
+				// No seed exists - show seed initialization UI
+				ShowSeedInitialization = true;
+				System.Diagnostics.Debug.WriteLine("[App] No seed found, showing seed initialization");
+				// Navigate to seed-initialization to ensure proper route handling
+				await Task.Delay(50); // Brief delay to allow render
+				Navigation.NavigateTo("/seed-initialization", replace: true);
+				return;
+			}
+
+			// Seed exists - user will see password prompt
+			// (SeedUnlocked stays false until password is entered)
+			System.Diagnostics.Debug.WriteLine("[App] Encrypted seed found, waiting for password entry");
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"[App] Error checking GunDB initialization: {ex.Message}");
+			// On error, assume no seed and show initialization
+			ShowSeedInitialization = true;
+			// Navigate to seed-initialization to ensure proper route handling
+			await Task.Delay(50);
+			Navigation.NavigateTo("/seed-initialization", replace: true);
+		}
+		finally
+		{
+			IsCheckingInitialization = false;
+			StateHasChanged();
+		}
+	}
+
+	/// <summary>
+	/// Handles password entry for decrypting stored seed.
+	/// </summary>
+	private async Task HandlePasswordEntered(string password)
+	{
+		try
+		{
+			System.Diagnostics.Debug.WriteLine("[App] HandlePasswordEntered: Attempting to decrypt seed");
+
+			// Retrieve and decrypt the seed with the password
+			var decryptedSeed = await SeedService.GetStoredSeedAsync(password);
+
+			if (string.IsNullOrEmpty(decryptedSeed))
+			{
+				// This shouldn't happen, but handle gracefully
+				throw new InvalidOperationException("Failed to decrypt seed");
+			}
+
+			System.Diagnostics.Debug.WriteLine("[App] HandlePasswordEntered: Seed decrypted successfully");
+
+			// Seed is decrypted - initialize GunDB with it
+			GunDbService.SetSeed(decryptedSeed);
+
+			// Trigger initialization
+			await GunDbService.GetOnceAsync<object>("_init", CancellationToken.None);
+
+			System.Diagnostics.Debug.WriteLine("[App] HandlePasswordEntered: GunDB initialized");
+
+			SeedUnlocked = true;
+			GunDbInitialized = true;
+		}
+		catch (InvalidOperationException ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"[App] HandlePasswordEntered: Decryption failed - {ex.Message}");
+			// Password was incorrect - notify the PasswordPrompt component
+			if (PasswordPromptRef != null)
+			{
+				PasswordPromptRef.SetErrorMessage("Invalid password. Please try again.");
+			}
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"[App] HandlePasswordEntered: Error - {ex.Message}");
+			// Redirect to seed initialization on error
+			ShowSeedInitialization = true;
+		}
+	}
+
+	/// <summary>
+	/// Handles starting fresh with a new seed.
+	/// </summary>
+	private async Task HandleStartFresh()
+	{
+		System.Diagnostics.Debug.WriteLine("[App] HandleStartFresh: User chose to start fresh");
+		ShowSeedInitialization = true;
+		await Task.CompletedTask;
+	}
+}

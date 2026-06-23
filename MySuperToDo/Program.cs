@@ -31,6 +31,9 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 builder.Services.AddScoped<UserAuthService>();
 
+// GunDB seed management
+builder.Services.AddScoped<GunDbSeedService>();
+
 // GunDB — decentralised graph database, scoped to the app reticle
 builder.Services.AddScoped<IGunDbService, GunDbService>();
 

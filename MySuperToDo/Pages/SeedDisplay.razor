@@ -1,0 +1,146 @@
+@using System.Diagnostics
+@inject IJSRuntime JSRuntime
+
+<div class="seed-display-card">
+	<div class="card">
+		<div class="card-body">
+			<h2 class="card-title mb-4">Save Your Seed</h2>
+
+			<div class="alert alert-warning" role="alert">
+				<h4 class="alert-heading">⚠️ Critical: Save This Seed Now</h4>
+				<p>
+					This is your only chance to copy your seed. If you lose it, you may not be able 
+					to recover your GunDB identity and data. Store it in a secure location:
+				</p>
+				<ul class="mb-0">
+					<li>Password manager (recommended)</li>
+					<li>Encrypted file</li>
+					<li>Secure note-taking app</li>
+					<li>Anywhere you consider safe and private</li>
+				</ul>
+			</div>
+
+			<div class="seed-display-box mt-4 mb-3">
+				<div class="seed-text" id="seedText">@Seed</div>
+				<button class="btn btn-sm btn-outline-secondary copy-btn" 
+						@onclick="CopySeedToClipboard"
+						title="Copy seed to clipboard">
+					@if (CopyButtonText == "Copy")
+					{
+						<span>📋 Copy</span>
+					}
+					else
+					{
+						<span>✓ Copied!</span>
+					}
+				</button>
+			</div>
+
+			<div class="form-check mb-4">
+				<input class="form-check-input" type="checkbox" id="confirmSeedSaved" 
+					   @onchange="@((ChangeEventArgs e) => IsSeedSaved = (bool?)e.Value ?? false)" />
+				<label class="form-check-label" for="confirmSeedSaved">
+					I have saved my seed in a secure location
+				</label>
+			</div>
+
+			<button class="btn btn-primary w-100" 
+					@onclick="HandleConfirmed"
+					disabled="@(!IsSeedSaved || IsProcessing)">
+				@if (IsProcessing)
+				{
+					<span class="spinner-border spinner-border-sm me-2"></span>
+				}
+				Continue to Initialize Database
+			</button>
+		</div>
+	</div>
+</div>
+
+@code {
+	[Parameter]
+	public string Seed { get; set; } = string.Empty;
+
+	[Parameter]
+	public EventCallback OnConfirmed { get; set; }
+
+	private bool IsSeedSaved;
+	private bool IsProcessing;
+	private string CopyButtonText = "Copy";
+
+	/// <summary>
+	/// Copies the seed to the clipboard.
+	/// </summary>
+	private async Task CopySeedToClipboard()
+	{
+		try
+		{
+			await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", Seed);
+			CopyButtonText = "Copied!";
+			await Task.Delay(2000);
+			CopyButtonText = "Copy";
+			StateHasChanged();
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"Failed to copy seed: {ex.Message}");
+		}
+	}
+
+	/// <summary>
+	/// Handles confirmation of seed being saved.
+	/// </summary>
+	private async Task HandleConfirmed()
+	{
+		IsProcessing = true;
+		try
+		{
+			await OnConfirmed.InvokeAsync();
+		}
+		finally
+		{
+			IsProcessing = false;
+		}
+	}
+}
+
+<style>
+	.seed-display-card {
+		max-width: 600px;
+		margin: 0 auto;
+	}
+
+	.card {
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+	}
+
+	.seed-display-box {
+		position: relative;
+		background-color: #f8f9fa;
+		border: 2px solid #dee2e6;
+		border-radius: 0.5rem;
+		padding: 1rem;
+		word-break: break-all;
+		font-family: 'Courier New', monospace;
+		font-size: 0.9rem;
+	}
+
+	.seed-text {
+		min-height: 100px;
+		padding: 0.5rem;
+		background-color: white;
+		border-radius: 0.25rem;
+		margin-bottom: 0.5rem;
+		user-select: all;
+	}
+
+	.copy-btn {
+		position: absolute;
+		top: 1rem;
+		right: 1rem;
+	}
+
+	.copy-btn:hover {
+		background-color: #e2e6ea;
+	}
+</style>

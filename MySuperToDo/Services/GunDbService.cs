@@ -21,6 +21,7 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
     private readonly string _appScope;
     private readonly object _gate = new();
     private string[] _peers = [];
+    private string? _seed;
 
     public bool HasPeers => _peers.Length > 0;
     public IReadOnlyList<string> PeerUrls => _peers;
@@ -46,7 +47,7 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
 
         if (!_initialized)
         {
-            await _module.InvokeVoidAsync("initialize", cancellationToken, _peers, _appScope);
+            await _module.InvokeVoidAsync("initialize", cancellationToken, _peers, _appScope, _seed);
             _initialized = true;
         }
 
@@ -75,7 +76,22 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
         var peerList = _peers.Length > 0 ? string.Join(", ", _peers) : "(none)";
         System.Diagnostics.Debug.WriteLine($"[GunDB] UpdatePeersAsync: Peers = {peerList}");
 
-        await module.InvokeVoidAsync("reinitialize", cancellationToken, _peers, _appScope);
+        await module.InvokeVoidAsync("reinitialize", cancellationToken, _peers, _appScope, _seed);
+    }
+
+    /// <summary>
+    /// Sets the seed for deterministic Gun identity creation.
+    /// Must be called before the first operation that triggers module initialization.
+    /// </summary>
+    /// <param name="seed">The seed string to use for identity generation.</param>
+    public void SetSeed(string seed)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(seed);
+        lock (_gate)
+        {
+            _seed = seed;
+        }
+        System.Diagnostics.Debug.WriteLine("[GunDB] Seed set for identity derivation");
     }
 
     public async Task PutAsync(string path, object data, CancellationToken cancellationToken = default)

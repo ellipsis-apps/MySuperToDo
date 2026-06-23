@@ -50,4 +50,11 @@ public interface IGunDbService
 
     /// <summary>Removes (nulls out) the node at <paramref name="path"/>.</summary>
     Task RemoveAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the seed for deterministic Gun identity creation.
+    /// Must be called before the first operation that triggers module initialization.
+    /// </summary>
+    /// <param name="seed">The seed string to use for identity generation.</param>
+    void SetSeed(string seed);
 }

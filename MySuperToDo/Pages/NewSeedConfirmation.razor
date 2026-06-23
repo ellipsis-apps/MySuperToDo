@@ -1,0 +1,60 @@
+@using MySuperToDo.Services
+
+<div>
+	<div class="alert alert-info" role="alert">
+		<h4 class="alert-heading">Create a New Seed</h4>
+		<p>
+			A seed is a cryptographic value that securely stores your GunDB identity. 
+			Without it, you won't be able to recover your data if you clear your browser storage.
+		</p>
+		<hr>
+		<p class="mb-0">
+			<strong>Important:</strong> After creation, you'll see your seed and must copy it 
+			to a secure location (password manager, encrypted file, etc.).
+		</p>
+	</div>
+
+	<div class="form-check mb-4">
+		<input class="form-check-input" type="checkbox" id="confirmUnderstand" 
+			   @onchange="@((ChangeEventArgs e) => IsConfirmed = (bool?)e.Value ?? false)" />
+		<label class="form-check-label" for="confirmUnderstand">
+			I understand the importance of saving my seed securely
+		</label>
+	</div>
+
+	<div class="mt-4">
+		<button class="btn btn-success w-100" 
+				@onclick="HandleContinue"
+				disabled="@(!IsConfirmed || IsProcessing)">
+			@if (IsProcessing)
+			{
+				<span class="spinner-border spinner-border-sm me-2"></span>
+			}
+			Create New Seed
+		</button>
+	</div>
+</div>
+
+@code {
+	[Parameter]
+	public EventCallback OnConfirmed { get; set; }
+
+	private bool IsConfirmed;
+	private bool IsProcessing;
+
+	/// <summary>
+	/// Handles the creation of a new seed after user confirmation.
+	/// </summary>
+	private async Task HandleContinue()
+	{
+		IsProcessing = true;
+		try
+		{
+			await OnConfirmed.InvokeAsync();
+		}
+		finally
+		{
+			IsProcessing = false;
+		}
+	}
+}

@@ -1,9 +1,13 @@
 using Microsoft.AspNetCore.Components;
+using MySuperToDo.Services;
 
 namespace MySuperToDo.Pages;
 
 public partial class Home
 {
+    [Inject]
+    public GunDbSeedService GunDbSeedService { get; set; } = default!;
+
     private readonly LoginModel _model = new();
     private string _errorMessage = string.Empty;
     private bool _isBusy;
@@ -11,6 +15,14 @@ public partial class Home
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+
+        // First check: if GunDB seed doesn't exist, user needs to initialize it
+        var seedExists = await GunDbSeedService.SeedExistsAsync();
+        if (!seedExists)
+        {
+            Navigation.NavigateTo($"{Navigation.BaseUri}seed-initialization", replace: true);
+            return;
+        }
 
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)

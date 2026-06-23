@@ -1,0 +1,68 @@
+@using MySuperToDo.Services
+
+<div>
+	<label for="seedInput" class="form-label">Enter Your Seed</label>
+	<textarea class="form-control" id="seedInput" rows="4" 
+			  @bind="SeedInput" 
+			  placeholder="Paste your seed here..."></textarea>
+
+	@if (!string.IsNullOrEmpty(ValidationMessage))
+	{
+		<div class="alert alert-warning mt-2" role="alert">
+			@ValidationMessage
+		</div>
+	}
+
+	<div class="mt-4">
+		<button class="btn btn-primary w-100" 
+				@onclick="HandleContinue"
+				disabled="@IsProcessing">
+			@if (IsProcessing)
+			{
+				<span class="spinner-border spinner-border-sm me-2"></span>
+			}
+			Continue
+		</button>
+	</div>
+</div>
+
+@code {
+	[Parameter]
+	public EventCallback<string> OnSeedEntered { get; set; }
+
+	private string SeedInput = string.Empty;
+	private string? ValidationMessage;
+	private bool IsProcessing;
+
+	/// <summary>
+	/// Validates and submits the entered seed.
+	/// </summary>
+	private async Task HandleContinue()
+	{
+		ValidationMessage = null;
+		IsProcessing = true;
+
+		try
+		{
+			if (string.IsNullOrWhiteSpace(SeedInput))
+			{
+				ValidationMessage = "Please enter a seed or go back to create a new one.";
+				return;
+			}
+
+			var trimmedSeed = SeedInput.Trim();
+
+			if (!GunDbSeedService.IsValidSeed(trimmedSeed))
+			{
+				ValidationMessage = "Invalid seed format. Please ensure it's a valid base64 string.";
+				return;
+			}
+
+			await OnSeedEntered.InvokeAsync(trimmedSeed);
+		}
+		finally
+		{
+			IsProcessing = false;
+		}
+	}
+}
