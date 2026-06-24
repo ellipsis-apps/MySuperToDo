@@ -1,5 +1,7 @@
 ﻿@using MySuperToDo.Services
 @inject GunDbSeedService SeedService
+@inject SeedUnlockService SeedUnlock
+@inject NavigationManager Navigation
 
 <CascadingAuthenticationState>
     @if (!IsInitialized)
@@ -39,10 +41,17 @@
             // Check if a GunDB seed exists
             var seedExists = await SeedService.SeedExistsAsync();
 
-            if (!seedExists)
+            if (seedExists)
             {
-                // Redirect to seed initialization
-                // Note: The Router will handle the /seed-initialization route
+                // Try silent unlock from session storage. If it fails, navigate to unlock page.
+                var unlocked = await SeedUnlock.TrySilentUnlockAsync();
+                if (!unlocked)
+                {
+                    // Ensure the App renders the Router so the /unlock page can be shown.
+                    IsInitialized = true;
+                    Navigation.NavigateTo("/unlock", replace: true);
+                    return;
+                }
             }
 
             IsInitialized = true;

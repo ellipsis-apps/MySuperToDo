@@ -1,8 +1,11 @@
 @page "/seed-initialization"
 @using MySuperToDo.Services
 @using MySuperToDo.Application.Interfaces
+@using MySuperToDo.Domain.Entities
 @inject GunDbSeedService SeedService
 @inject IGunDbService GunDbService
+@inject UserAuthService UserAuth
+@inject CustomAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 
 <div class="seed-initialization-container">
@@ -18,6 +21,12 @@
 				<div class="card-body">
 					<h2 class="card-title mb-4">Add Password to Protect Seed</h2>
 					<p class="text-muted small mb-4">Create a password to encrypt your imported seed. You'll need this password each time you open the app.</p>
+
+					<div class="mb-3">
+						<label class="form-label">Preferred username</label>
+						<input class="form-control" @bind="PreferredUsername" placeholder="seed_user" />
+						<div class="form-text">This will be your application username stored in your profile.</div>
+					</div>
 
 					<div class="mb-3">
 						<label for="passwordInput" class="form-label">Password</label>
@@ -85,8 +94,8 @@
 	private string? CurrentSeed;
 	private string? CurrentPassword;
 	private string? PasswordConfirm;
+	private string? PreferredUsername;
 	private string? ErrorMessage;
-	private bool IsImportingExistingSeed;
 
 	/// <summary>
 	/// Handles when a seed is entered by the user (either new or existing).
@@ -115,7 +124,6 @@
 			else
 			{
 				// Existing seed: prompt for password to encrypt it for storage
-				IsImportingExistingSeed = true;
 				ErrorMessage = null;
 				PasswordConfirm = null;
 				CurrentStep = InitializationStep.PasswordEntry;
@@ -146,7 +154,7 @@
 			// Store the encrypted seed with the password
 			await SeedService.StoreSeedAsync(CurrentSeed, CurrentPassword);
 			CurrentStep = InitializationStep.Initializing;
-			await InitializeGunDbAsync(CurrentSeed, CurrentPassword);
+			await InitializeGunDbAsync(CurrentSeed, CurrentPassword, PreferredUsername);
 		}
 		catch (Exception ex)
 		{
@@ -159,7 +167,7 @@
 	/// Initializes GunDB with the provided seed (and optional password for decryption).
 	/// After successful initialization, navigates to the home page.
 	/// </summary>
-	private async Task InitializeGunDbAsync(string seed, string? password = null)
+	private async Task InitializeGunDbAsync(string seed, string? password = null, string? preferredUsername = null)
 	{
 		try
 		{
@@ -172,10 +180,19 @@
 
 			System.Diagnostics.Debug.WriteLine("[SeedInitialization] GunDB initialized with seed");
 
+			// Ensure an application-level user exists for the deterministic seed and sign them in.
+			// Use the preferred username when provided; fall back to 'seed_user'.
+			var usernameToUse = string.IsNullOrWhiteSpace(preferredUsername) ? "seed_user" : preferredUsername;
+			var (user, error) = await UserAuth.SignInOrRegisterAsync(usernameToUse, seed);
+			if (error is null && user is not null)
+			{
+				await AuthStateProvider.SignInAsync(user.Id, user.Username, user.Email ?? string.Empty, rememberMe: true);
+			}
+
 			await Task.Delay(500); // Brief delay to allow Gun to stabilize
 
 			CurrentStep = InitializationStep.Complete;
-			Navigation.NavigateTo("/");
+			Navigation.NavigateTo("lists", replace: true);
 		}
 		catch (Exception ex)
 		{
@@ -243,7 +260,7 @@
 			System.Diagnostics.Debug.WriteLine("[SeedInitialization] Encrypted seed stored in IndexedDB");
 
 			// Initialize GunDB with the seed
-			await InitializeGunDbAsync(CurrentSeed, CurrentPassword);
+			await InitializeGunDbAsync(CurrentSeed, CurrentPassword, PreferredUsername);
 		}
 		catch (Exception ex)
 		{

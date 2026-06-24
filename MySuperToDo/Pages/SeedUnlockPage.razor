@@ -1,0 +1,70 @@
+@page "/unlock"
+@using MySuperToDo.Services
+@using Microsoft.AspNetCore.Components
+@inject SeedUnlockService UnlockService
+@inject NavigationManager Navigation
+
+<div class="unlock-container" style="max-width:420px;margin:3rem auto;">
+	<div class="card">
+		<div class="card-body">
+			<h4 class="card-title">Unlock MySuperToDo</h4>
+			<p class="text-muted small">Enter the password you used to encrypt your seed to unlock the app.</p>
+
+			@if (!string.IsNullOrEmpty(ErrorMessage))
+			{
+				<div class="alert alert-danger">@ErrorMessage</div>
+			}
+
+			<div class="mb-3">
+				<label class="form-label">Password</label>
+				<input type="password" class="form-control" @bind="Password" />
+			</div>
+
+			<div class="form-check mb-3">
+				<input class="form-check-input" type="checkbox" id="rememberDevice" @bind="RememberDevice" />
+				<label class="form-check-label" for="rememberDevice">Remember this device (session)</label>
+			</div>
+
+			<div class="d-grid gap-2">
+				<button class="btn btn-primary" @onclick="OnUnlockAsync" disabled="@IsProcessing">
+					@if (IsProcessing)
+					{
+						<span class="spinner-border spinner-border-sm me-2"></span>
+					}
+					Unlock
+				</button>
+				<button class="btn btn-link" @onclick="NavigateToSeedInitialization">Import / Create Seed</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+@code {
+	private string Password = string.Empty;
+	private bool RememberDevice = true;
+	private string? ErrorMessage;
+	private bool IsProcessing;
+
+	private async Task OnUnlockAsync()
+	{
+		ErrorMessage = null;
+		IsProcessing = true;
+
+		try
+		{
+			await UnlockService.UnlockWithPasswordAsync(Password, RememberDevice);
+			Navigation.NavigateTo("/lists", replace: true);
+		}
+		catch (Exception ex)
+		{
+			ErrorMessage = "Failed to unlock. Check your password and try again.";
+			System.Diagnostics.Debug.WriteLine($"[SeedUnlock] Unlock failed: {ex.Message}");
+		}
+		finally
+		{
+			IsProcessing = false;
+		}
+	}
+
+	private void NavigateToSeedInitialization() => Navigation.NavigateTo("/seed-initialization");
+}

@@ -1,50 +1,10 @@
 ﻿@page "/"
-@using MySuperToDo.Services
-@inject CustomAuthenticationStateProvider AuthStateProvider
-@inject UserAuthService UserAuth
 @inject NavigationManager Navigation
 
-<PageTitle>Sign In — MySuperToDo</PageTitle>
-
-<div class="row justify-content-center mt-5">
-    <div class="col-12 col-sm-8 col-md-6 col-lg-4">
-        <RadzenCard>
-            <RadzenStack Gap="1.5rem">
-
-                <RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" Gap="0.25rem">
-                    <h4 class="mb-0">MySuperToDo</h4>
-                    <p class="text-muted mb-0">Sign in to your account</p>
-                </RadzenStack>
-
-                <RadzenTemplateForm TItem="LoginModel" Data="@_model" Submit="@OnSubmitAsync">
-                    <RadzenStack Gap="1rem">
-
-                        <RadzenFormField Text="User Name" Variant="Variant.Outlined">
-                            <RadzenTextBox Name="UserName" @bind-Value="@_model.UserName"
-                                           Placeholder="Enter your user name" Style="width:100%" />
-                        </RadzenFormField>
-
-                        <RadzenFormField Text="Password" Variant="Variant.Outlined">
-                            <RadzenPassword Name="Password" @bind-Value="@_model.Password"
-                                            Placeholder="Enter your password" Style="width:100%" />
-                        </RadzenFormField>
-
-                        @if (!string.IsNullOrEmpty(_errorMessage))
-                        {
-                            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat"
-                                         Shade="Shade.Lighter" AllowClose="false">
-                                @_errorMessage
-                            </RadzenAlert>
-                        }
-
-                        <RadzenButton ButtonType="ButtonType.Submit" Text="Sign In"
-                                      ButtonStyle="ButtonStyle.Primary"
-                                      IsBusy="@_isBusy" BusyText="Signing in..."
-                                      Style="width:100%" />
-                    </RadzenStack>
-                </RadzenTemplateForm>
-
-            </RadzenStack>
-        </RadzenCard>
-    </div>
-</div>
+@code {
+    protected override void OnInitialized()
+    {
+        // Login page removed: redirect root to lists now that deterministic seeds are used.
+        Navigation.NavigateTo("lists", replace: true);
+    }
+}

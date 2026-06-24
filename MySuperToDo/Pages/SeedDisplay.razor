@@ -36,6 +36,12 @@
 				</button>
 			</div>
 
+			<div class="mb-3">
+				<label class="form-label">Preferred username</label>
+				<input class="form-control" @bind="PreferredUsername" placeholder="seed_user" />
+				<div class="form-text">This will be your application username stored in your profile.</div>
+			</div>
+
 			<div class="form-check mb-4">
 				<input class="form-check-input" type="checkbox" id="confirmSeedSaved" 
 					   @onchange="@((ChangeEventArgs e) => IsSeedSaved = (bool?)e.Value ?? false)" />
@@ -62,7 +68,9 @@
 	public string Seed { get; set; } = string.Empty;
 
 	[Parameter]
-	public EventCallback OnConfirmed { get; set; }
+	public EventCallback<string?> OnConfirmed { get; set; }
+
+	private string? PreferredUsername = "seed_user";
 
 	private bool IsSeedSaved;
 	private bool IsProcessing;
@@ -95,7 +103,7 @@
 		IsProcessing = true;
 		try
 		{
-			await OnConfirmed.InvokeAsync();
+			await OnConfirmed.InvokeAsync(PreferredUsername);
 		}
 		finally
 		{

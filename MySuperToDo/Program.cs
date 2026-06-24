@@ -37,4 +37,7 @@ builder.Services.AddScoped<GunDbSeedService>();
 // GunDB — decentralised graph database, scoped to the app reticle
 builder.Services.AddScoped<IGunDbService, GunDbService>();
 
+// Seed unlock helper (secure unlock flow)
+builder.Services.AddScoped<SeedUnlockService>();
+
 await builder.Build().RunAsync();
