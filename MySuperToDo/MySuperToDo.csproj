@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove=".editorconfig" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MySuperToDo.Application\MySuperToDo.Application.csproj" />
     <ProjectReference Include="..\MySuperToDo.Infrastructure\MySuperToDo.Infrastructure.csproj" />
   </ItemGroup>
@@ -34,6 +38,10 @@
 
   <ItemGroup>
     <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EditorConfigFiles Remove="C:\src\ellipsis.apps\MySuperToDo.Blazor.GunDB\MySuperToDo\MySuperToDo\.editorconfig" />
   </ItemGroup>
 
 </Project>
