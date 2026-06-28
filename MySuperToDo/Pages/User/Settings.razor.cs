@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Configuration;
 using Microsoft.JSInterop;
 
 using MySuperToDo.Domain.Entities;
@@ -11,6 +12,8 @@ namespace MySuperToDo.Pages.User;
 
 public partial class Settings
 {
+    [Inject] private IConfiguration Configuration { get; set; } = default!;
+
     private UserSettings? _settings;
     private DomainUser? _user;
     private string? _settingsId;
@@ -91,8 +94,23 @@ public partial class Settings
             }
 
             _settings = await GunDb.GetOnceAsync<UserSettings>($"user-settings/{_settingsId}") ?? settingsFromDb;
+            var configuredPeers = Configuration.GetSection("GunDB:MyPeers").Get<List<string>>() ?? [];
+            if (_settings.GetRelayServerUrls().Count == 0 && configuredPeers.Count > 0)
+            {
+                _settings.SetRelayServerUrls(configuredPeers);
+                await GunDb.PutAsync($"user-settings/{_settingsId}", _settings);
+            }
+
             _relayServerUrlsText = string.Join(Environment.NewLine, _settings.GetRelayServerUrls());
-            await GunDb.UpdatePeersAsync(_settings.GetRelayServerUrls());
+
+            try
+            {
+                await GunDb.UpdatePeersAsync(_settings.GetRelayServerUrls());
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Settings] Failed to apply relay peers: {ex.Message}");
+            }
         }
         catch (JSException ex)
         {
@@ -160,7 +178,14 @@ public partial class Settings
                 .ToList());
 
             await GunDb.PutAsync($"user-settings/{_settingsId}", _settings);
-            await GunDb.UpdatePeersAsync(_settings.GetRelayServerUrls());
+            try
+            {
+                await GunDb.UpdatePeersAsync(_settings.GetRelayServerUrls());
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Settings] Failed to apply relay peers after save: {ex.Message}");
+            }
             Navigation.NavigateTo($"{Navigation.BaseUri}", replace: true);
         }
         catch (JSException ex)

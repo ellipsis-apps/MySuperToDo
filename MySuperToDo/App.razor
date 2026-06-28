@@ -21,7 +21,7 @@
             <Found Context="routeData">
                 <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                     <NotAuthorized>
-                        <RedirectToSignIn />
+                        <UnlockRedirect />
                     </NotAuthorized>
                 </AuthorizeRouteView>
                 <FocusOnNavigate RouteData="@routeData" Selector="h1" />
@@ -40,18 +40,25 @@
         {
             // Check if a GunDB seed exists
             var seedExists = await SeedService.SeedExistsAsync();
+            System.Diagnostics.Debug.WriteLine($"[App.razor] seedExists = {seedExists}");
 
             if (seedExists)
             {
                 // Try silent unlock from session storage. If it fails, navigate to unlock page.
                 var unlocked = await SeedUnlock.TrySilentUnlockAsync();
+                System.Diagnostics.Debug.WriteLine($"[App.razor] TrySilentUnlockAsync returned: {unlocked}");
+
                 if (!unlocked)
                 {
                     // Ensure the App renders the Router so the /unlock page can be shown.
+                    System.Diagnostics.Debug.WriteLine("[App.razor] Navigating to /unlock");
                     IsInitialized = true;
                     Navigation.NavigateTo("/unlock", replace: true);
                     return;
                 }
+
+                await SeedUnlock.PopulateConfiguredPeersAsync();
+                System.Diagnostics.Debug.WriteLine("[App.razor] Silent unlock succeeded, continuing");
             }
 
             IsInitialized = true;

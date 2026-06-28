@@ -1,7 +1,11 @@
 using Blazored.SessionStorage;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 using MySuperToDo.Application.Interfaces;
+using MySuperToDo.Domain.Entities;
+
+using System.Security.Claims;
 
 namespace MySuperToDo.Services;
 
@@ -18,6 +22,7 @@ internal sealed class SeedUnlockService
     private readonly UserAuthService _userAuth;
     private readonly CustomAuthenticationStateProvider _authProvider;
     private readonly ISessionStorageService _sessionStorage;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<SeedUnlockService> _logger;
 
     public SeedUnlockService(
@@ -26,6 +31,7 @@ internal sealed class SeedUnlockService
         UserAuthService userAuth,
         CustomAuthenticationStateProvider authProvider,
         ISessionStorageService sessionStorage,
+        IConfiguration configuration,
         ILogger<SeedUnlockService> logger)
     {
         _seedService = seedService;
@@ -33,6 +39,7 @@ internal sealed class SeedUnlockService
         _userAuth = userAuth;
         _authProvider = authProvider;
         _sessionStorage = sessionStorage;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -118,7 +125,67 @@ internal sealed class SeedUnlockService
         var (user, error) = await _userAuth.SignInOrRegisterAsync("seed_user", seed, cancellationToken);
         if (error is null && user is not null)
         {
-            await _authProvider.SignInAsync(user.Id, user.Username, user.Email ?? string.Empty, rememberMe: true);
+            await _authProvider.SignInAsync(user.Id, user.Username, user.Email ?? string.Empty, rememberMe: false);
+            await PopulateConfiguredPeersAsync(cancellationToken);
+        }
+    }
+
+    public async Task PopulateConfiguredPeersAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var authState = await _authProvider.GetAuthenticationStateAsync();
+            var principal = authState.User;
+
+            if (principal.Identity?.IsAuthenticated != true)
+            {
+                return;
+            }
+
+            var username = principal.FindFirst(ClaimTypes.Name)?.Value;
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return;
+            }
+
+            var user = await _gunDb.GetOnceAsync<User>($"users/{username}", cancellationToken);
+            if (user is null)
+            {
+                return;
+            }
+
+            var settingsId = string.IsNullOrWhiteSpace(user.UserSettingsId)
+                ? $"{user.Id}-settings"
+                : user.UserSettingsId;
+
+            var settings = await _gunDb.GetOnceAsync<UserSettings>($"user-settings/{settingsId}", cancellationToken) ?? new UserSettings();
+            var existingPeers = settings.GetRelayServerUrls();
+            if (existingPeers.Count > 0)
+            {
+                await _gunDb.UpdatePeersAsync(existingPeers, cancellationToken);
+                return;
+            }
+
+            var configuredPeers = _configuration.GetSection("GunDB:MyPeers").Get<List<string>>() ?? new List<string>();
+            if (configuredPeers.Count == 0)
+            {
+                return;
+            }
+
+            settings.SetRelayServerUrls(configuredPeers);
+            await _gunDb.PutAsync($"user-settings/{settingsId}", settings, cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(user.UserSettingsId))
+            {
+                user.UserSettingsId = settingsId;
+                await _gunDb.PutAsync($"users/{username}", user, cancellationToken);
+            }
+
+            await _gunDb.UpdatePeersAsync(configuredPeers, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SeedUnlock: failed to populate configured relay peers into user settings.");
         }
     }
 }

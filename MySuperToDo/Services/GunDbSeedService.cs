@@ -187,4 +187,21 @@ public sealed class GunDbSeedService
 
         return await _jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/gun-interop.js");
     }
+
+    /// <summary>
+    /// Checks whether the GunDB IndexedDB database exists locally (returns true if present).
+    /// </summary>
+    public async Task<bool> GunDbExistsAsync()
+    {
+        try
+        {
+            var gunInterop = await GetGunInteropAsync();
+            return await gunInterop.InvokeAsync<bool>("gunDatabaseExists");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GunDbSeedService] GunDbExistsAsync failed: {ex.Message}");
+            return false;
+        }
+    }
 }

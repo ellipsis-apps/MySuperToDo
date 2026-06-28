@@ -1,4 +1,3 @@
-using Blazored.LocalStorage;
 using Blazored.SessionStorage;
 
 using Microsoft.AspNetCore.Components.Authorization;
@@ -8,21 +7,17 @@ using System.Security.Claims;
 namespace MySuperToDo.Services;
 
 /// <summary>
-/// Manages Blazor authentication state backed by browser localStorage (remember me)
-/// or sessionStorage (session only) via Blazored.LocalStorage.
+/// Manages Blazor authentication state backed by sessionStorage (session only).
 /// </summary>
 public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 {
-    private readonly ILocalStorageService _localStorage;
     private readonly ISessionStorageService _sessionStorage;
     private const string StorageKey = "auth_user";
     private ClaimsPrincipal _currentUser = new(new ClaimsIdentity());
 
     public CustomAuthenticationStateProvider(
-        ILocalStorageService localStorage,
         ISessionStorageService sessionStorage)
     {
-        _localStorage = localStorage;
         _sessionStorage = sessionStorage;
     }
 
@@ -30,8 +25,7 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
     {
         try
         {
-            var userInfo = await _localStorage.GetItemAsync<AuthUserInfo>(StorageKey)
-                        ?? await _sessionStorage.GetItemAsync<AuthUserInfo>(StorageKey);
+            var userInfo = await _sessionStorage.GetItemAsync<AuthUserInfo>(StorageKey);
 
             _currentUser = userInfo is null
                 ? new ClaimsPrincipal(new ClaimsIdentity())
@@ -46,24 +40,21 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         }
     }
 
-    /// <summary>Signs the user in and persists their identity in browser storage.</summary>
+    /// <summary>Signs the user in and persists their identity in session storage only.</summary>
     public async Task SignInAsync(string userId, string username, string email, bool rememberMe = false)
     {
         var userInfo = new AuthUserInfo(userId, username, email);
 
-        if (rememberMe)
-            await _localStorage.SetItemAsync(StorageKey, userInfo);
-        else
-            await _sessionStorage.SetItemAsync(StorageKey, userInfo);
+        // Always use session storage, ignoring rememberMe for security (session-only)
+        await _sessionStorage.SetItemAsync(StorageKey, userInfo);
 
         _currentUser = CreatePrincipal(userInfo);
         NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
     }
 
-    /// <summary>Signs the user out and removes their identity from browser storage.</summary>
+    /// <summary>Signs the user out and removes their identity from session storage.</summary>
     public async Task SignOutAsync()
     {
-        await _localStorage.RemoveItemAsync(StorageKey);
         await _sessionStorage.RemoveItemAsync(StorageKey);
         _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
         NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));

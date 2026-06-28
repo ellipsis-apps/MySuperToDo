@@ -6,6 +6,7 @@
 @inject IGunDbService GunDbService
 @inject UserAuthService UserAuth
 @inject CustomAuthenticationStateProvider AuthStateProvider
+@inject SeedUnlockService SeedUnlock
 @inject NavigationManager Navigation
 
 <div class="seed-initialization-container">
@@ -186,7 +187,8 @@
 			var (user, error) = await UserAuth.SignInOrRegisterAsync(usernameToUse, seed);
 			if (error is null && user is not null)
 			{
-				await AuthStateProvider.SignInAsync(user.Id, user.Username, user.Email ?? string.Empty, rememberMe: true);
+				await AuthStateProvider.SignInAsync(user.Id, user.Username, user.Email ?? string.Empty, rememberMe: false);
+				await SeedUnlock.PopulateConfiguredPeersAsync();
 			}
 
 			await Task.Delay(500); // Brief delay to allow Gun to stabilize
