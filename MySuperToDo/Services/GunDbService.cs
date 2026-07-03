@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.JSInterop;
 
 using MySuperToDo.Application.Interfaces;
@@ -37,6 +38,7 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
     {
         _js = js;
         _appScope = configuration["GunDB:AppScope"] ?? "mysupertodo";
+        _peers = configuration.GetSection("GunDB:MyPeers").Get<string[]>() ?? [];
     }
 
     private async ValueTask<IJSObjectReference> GetModuleAsync(CancellationToken cancellationToken = default)

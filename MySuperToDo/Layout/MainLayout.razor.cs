@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Radzen.Blazor;
 
 using MySuperToDo.Application.Interfaces;
-using MySuperToDo.Domain.Entities;
-using MySuperToDo.Services;
 
 namespace MySuperToDo.Layout;
 
@@ -58,45 +56,17 @@ public partial class MainLayout : LayoutComponentBase, IDisposable
 
     private async Task LoadPeersAsync(AuthenticationState state)
     {
+        var configuredPeers = GunDb.PeerUrls;
+        UpdatePeerState(configuredPeers);
+
         if (state.User.Identity?.IsAuthenticated != true)
         {
-            await GunDb.UpdatePeersAsync([]);
-            UpdatePeerState([]);
             return;
         }
 
-        var username = state.User.Identity?.Name;
-        if (string.IsNullOrWhiteSpace(username))
+        if (configuredPeers.Count > 0)
         {
-            await GunDb.UpdatePeersAsync([]);
-            UpdatePeerState([]);
-            return;
-        }
-
-        try
-        {
-            // Use retries to handle transient failures during initial peer setup.
-            // This resolves a circular dependency: peers are needed to read user settings,
-            // but user settings contain the peer URLs. We retry to give the first read a chance.
-            var user = await RetryGetAsync<User>($"users/{username}", maxAttempts: 3);
-            if (user is null || string.IsNullOrWhiteSpace(user.UserSettingsId))
-            {
-                // User data not yet available, but don't clear peers.
-                // This allows authenticated users to work with existing peer configuration.
-                return;
-            }
-
-            var settings = await RetryGetAsync<UserSettings>(
-                $"user-settings/{user.UserSettingsId}", maxAttempts: 3);
-            var peerUrls = settings?.GetRelayServerUrls() ?? [];
-            await GunDb.UpdatePeersAsync(peerUrls);
-            UpdatePeerState(peerUrls);
-        }
-        catch (Exception ex)
-        {
-            // Log but don't crash on peer loading failures.
-            // The user can still interact with existing data.
-            System.Diagnostics.Debug.WriteLine($"[MainLayout] Failed to load peers: {ex.Message}");
+            await GunDb.UpdatePeersAsync(configuredPeers);
         }
     }
 

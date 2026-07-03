@@ -58,7 +58,14 @@ export function initialize(peers, appScope) {
     if (peers && peers.length > 0) {
         opts.peers = peers;
     }
-    _gun = Gun(opts);
+    try {
+        console.debug('[GunInterop] initialize peers:', peers);
+        _gun = Gun(opts);
+    }
+    catch (err) {
+        console.error('[GunInterop] initialize error', err);
+        throw err;
+    }
     // The reticle: every operation in this wrapper is anchored to this node.
     _reticle = _gun.get(appScope);
 }
@@ -67,6 +74,7 @@ export function initialize(peers, appScope) {
  * Reinitializes the Gun instance with a new peer list while preserving the app reticle.
  */
 export function reinitialize(peers, appScope) {
+    console.debug('[GunInterop] reinitialize peers:', peers);
     disposeAll();
     initialize(peers, appScope);
 }

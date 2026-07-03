@@ -60,6 +60,7 @@ a, .btn-link {
     height: 0.55rem;
     border-radius: 50%;
     background-color: #6c757d;
+    cursor: help;
 }
 
 .gun-status--online {

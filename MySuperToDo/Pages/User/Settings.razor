@@ -45,16 +45,6 @@
                     <RadzenText TextStyle="TextStyle.Body1">All items completed completes list</RadzenText>
                 </RadzenStack>
 
-                <RadzenStack Gap="0.25rem">
-                    <RadzenText TextStyle="TextStyle.Body1">GunDB peer URLs</RadzenText>
-                    <RadzenTextArea @bind-Value="_relayServerUrlsText"
-                                    Style="width: 100%; min-height: 8rem;"
-                                    Placeholder="Enter one peer URL per line" />
-                    <RadzenText TextStyle="TextStyle.Caption" Style="color: var(--rz-text-secondary-color);">
-                        One URL per line.
-                    </RadzenText>
-                </RadzenStack>
-
                 <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
                     <RadzenButton Text="Save"
                                   Icon="save"
