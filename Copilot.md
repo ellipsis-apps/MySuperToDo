@@ -44,6 +44,7 @@
 - Primary constructors for dependency injection
 - Sealed classes for implementations
 - Internal by default, public only for contracts
+- Single class per file
 
 ## Patterns We Use
 - Result<T> pattern for all handler return types
