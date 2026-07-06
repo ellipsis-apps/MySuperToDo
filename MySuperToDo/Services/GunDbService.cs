@@ -41,6 +41,20 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
         _peers = configuration.GetSection("GunDB:MyPeers").Get<string[]>() ?? [];
     }
 
+    public async Task<bool> ReticleExistsAsync(CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync(cancellationToken);
+        try
+        {
+            return await module.InvokeAsync<bool>("reticleExists", cancellationToken, _appScope);
+        }
+        catch (JSException)
+        {
+            // If JS is unavailable or the module fails, conservatively assume no reticle.
+            return false;
+        }
+    }
+
     private async ValueTask<IJSObjectReference> GetModuleAsync(CancellationToken cancellationToken = default)
     {
         _module ??= await _js.InvokeAsync<IJSObjectReference>(

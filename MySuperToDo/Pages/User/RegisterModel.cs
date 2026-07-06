@@ -1,6 +1,6 @@
-﻿namespace MySuperToDo.Pages.User
-{
-private sealed class RegisterModel
+﻿namespace MySuperToDo.Pages.User;
+
+public record RegisterModel
 {
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;

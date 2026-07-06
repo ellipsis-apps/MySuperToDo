@@ -36,7 +36,10 @@
     <!-- GunDB — decentralised graph database. Must load before gun-interop.js module. -->
     <!-- To pin a version, replace "gun" with e.g. "gun@0.2020.1240" -->
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <!-- SEA provides the cryptographic primitives used by Gun's user API. -->
+    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
     <script src="js/backup.js"></script>
+    <script src="js/trim-inputs.js"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
     <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>

@@ -50,4 +50,11 @@ public interface IGunDbService
 
     /// <summary>Removes (nulls out) the node at <paramref name="path"/>.</summary>
     Task RemoveAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks whether the app reticle (configured via GunDB:AppScope) currently
+    /// contains any data. This performs a one-shot read via Gun.get(appScope).once(...)
+    /// and returns true when the reticle node is non-null.
+    /// </summary>
+    Task<bool> ReticleExistsAsync(CancellationToken cancellationToken = default);
 }

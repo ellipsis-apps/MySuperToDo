@@ -1,12 +1,66 @@
-﻿<CascadingAuthenticationState>
-<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
-    <Found Context="routeData">
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
-                <NotAuthorized>
-                    <RedirectToSignIn />
-                </NotAuthorized>
-            </AuthorizeRouteView>
-        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-    </Found>
-</Router>
+﻿@using MySuperToDo.Services
+@using MySuperToDo.Application.Interfaces
+@inject NavigationManager Navigation
+@inject IGunDbService GunDbService
+
+<CascadingAuthenticationState>
+    @if (!IsInitialized)
+    {
+        @if (IsCheckingInitialization)
+        {
+            <div class="d-flex justify-content-center align-items-center" style="height: 100vh;">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+            <Found Context="routeData">
+                <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                    <NotAuthorized>
+                        <UnlockRedirect />
+                    </NotAuthorized>
+                </AuthorizeRouteView>
+                <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+            </Found>
+        </Router>
+    }
 </CascadingAuthenticationState>
+
+@code {
+    private bool IsInitialized;
+    private bool IsCheckingInitialization = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Perform a reliable runtime check for the app reticle via GunDbService.
+            var gunDbExists = await GunDbService.ReticleExistsAsync();
+            System.Diagnostics.Debug.WriteLine($"[App.razor] gunDbExists = {gunDbExists}");
+
+            if (!gunDbExists)
+            {
+                System.Diagnostics.Debug.WriteLine("[App.razor] No GunDB reticle found, navigating to /database/manage");
+                IsInitialized = true; // render router so manage-database page can show
+                Navigation.NavigateTo("/database/manage", replace: true);
+                return;
+            }
+
+            // If the reticle exists, continue to render the app normally.
+            IsInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[App] Error checking GunDB initialization: {ex.Message}");
+            IsInitialized = true; // Still initialize app to avoid blocking
+        }
+        finally
+        {
+            IsCheckingInitialization = false;
+        }
+    }
+}

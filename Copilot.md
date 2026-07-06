@@ -45,6 +45,7 @@
 - Sealed classes for implementations
 - Internal by default, public only for contracts
 - Single class per file
+- Always use file scoped namespaces
 
 ## Patterns We Use
 - Result<T> pattern for all handler return types
