@@ -33,7 +33,7 @@ public partial class AllItems : IAsyncDisposable
     private bool _allItemsCompletedCompletesList = true;
     private List<TreeNode> _treeData =
     [
-        new TreeNode { Text = "📋 All Lists", Expanded = true }
+        new TreeNode { Text = "📋 All Lists", Expanded = true, Children = new List<TreeNode>() }
     ];
     private const string AllItemsListId = "all-items";
     private const string AllItemsListName = "All To Do Items";
@@ -442,7 +442,8 @@ public partial class AllItems : IAsyncDisposable
             IsCompleted = list.Status == ToDoStatus.Completed,
             IsUrgent = list.IsUrgent,
             DueDate = list.DueDate,
-            Priority = list.Priority
+            Priority = list.Priority,
+            Children = new List<TreeNode>()
         };
         if (_childListIdsByParentId.TryGetValue(list.Id, out var childListIds))
         {
@@ -473,7 +474,9 @@ public partial class AllItems : IAsyncDisposable
                     SuppressDragIcon = suppressDragIcon,
                     IsUrgent = item.IsUrgent,
                     Priority = item.Priority,
-                    DueDate = item.DueDate
+                    DueDate = item.DueDate,
+                    // ensure leaf nodes do not expose an (empty) Children collection
+                    Children = null
                 });
             }
         }
@@ -937,7 +940,8 @@ public partial class AllItems : IAsyncDisposable
         public bool IsUrgent { get; set; }
         public Priority Priority { get; set; } = Priority.Medium;
         public DateTime? DueDate { get; set; }
-        public List<TreeNode> Children { get; set; } = [];
+        // Null means no children (leaf). RadzenTree shows expand/collapse only when Children is non-null.
+        public List<TreeNode>? Children { get; set; }
     }
     private sealed class ListItemLink
     {

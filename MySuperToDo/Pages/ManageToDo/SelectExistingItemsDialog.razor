@@ -1,0 +1,316 @@
+@using MySuperToDo.Domain.Entities
+@using MySuperToDo.Domain.Enums
+@using MySuperToDo.Application.Interfaces
+@using System.Text.Json
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
+
+<RadzenStack Gap="1rem" style="position: relative;">
+	@if (_isLoading)
+	{
+		<div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.3); border-radius: 4px; display: flex; align-items: center; justify-content: center; z-index: 100;">
+			<RadzenStack AlignItems="AlignItems.Center" Gap="1rem">
+				<RadzenProgressBarCircular Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" Style="width: 60px; height: 60px;" />
+				<RadzenText TextStyle="TextStyle.Subtitle2" style="color: white;">Updating list...</RadzenText>
+			</RadzenStack>
+		</div>
+	}
+	<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween">
+		<RadzenText TextStyle="TextStyle.Subtitle1">Select items to add to this list</RadzenText>
+		<RadzenButton Text="Select All" 
+					  Size="ButtonSize.Small" 
+					  ButtonStyle="ButtonStyle.Light"
+					  Click="@SelectAllItems" />
+	</RadzenStack>
+
+	<div style="border: 1px solid var(--rz-border-color); border-radius: 4px; padding: 0.5rem; max-height: 400px; overflow-y: auto;">
+		@if (_items.Count == 0)
+		{
+			<div class="text-center text-muted" style="padding: 2rem;">
+				<p>No items available</p>
+			</div>
+		}
+		else
+		{
+			<RadzenStack Gap="0.25rem">
+				@foreach (var item in _items)
+				{
+					<div style="padding: 0.5rem; border-radius: 4px; hover {background-color: var(--rz-state-hover, #f5f5f5);}">
+						<RadzenCheckBox TValue="bool"
+										Value="@(_selectedItemIds.Contains(item.Id))"
+										Change="@((bool isChecked) => OnItemCheckedChanged(item.Id, isChecked))"
+										Name="@($"item-{item.Id}")"
+										Style="margin-right: 0.5rem;" />
+						<label for="@($"item-{item.Id}")" style="cursor: pointer; user-select: none;">
+							@item.Title
+						</label>
+					</div>
+				}
+			</RadzenStack>
+		}
+	</div>
+
+	<RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
+		<RadzenButton Text="Cancel"
+					  ButtonStyle="ButtonStyle.Light"
+					  Click="@OnCancel" />
+		<RadzenButton Text="Update List"
+					  ButtonStyle="ButtonStyle.Success"
+					  Icon="add_circle_outline"
+					  Click="@OnAddAsync"
+					  Disabled="@(_selectedItemIds.Count == 0)" />
+	</RadzenStack>
+</RadzenStack>
+
+@code {
+	[Parameter]
+	public DialogService? DialogService { get; set; }
+
+	[Parameter]
+	public string? ListId { get; set; }
+
+	[Parameter]
+	public IGunDbService? GunDb { get; set; }
+
+	private List<ToDoItem> _items = [];
+	private HashSet<string> _selectedItemIds = [];
+	private HashSet<string> _currentListItemIds = [];
+	private IAsyncDisposable? _itemsSubscription;
+	private IAsyncDisposable? _listItemsSubscription;
+	private readonly Dictionary<string, ToDoItem> _itemsById = [];
+	private DialogService? _dialogServiceReference;
+	private bool _isLoading = false;
+
+	protected override async Task OnInitializedAsync()
+	{
+		await JSRuntime.InvokeVoidAsync("console.log", "SelectExistingItemsDialog.OnInitializedAsync called");
+		await JSRuntime.InvokeVoidAsync("console.log", $"GunDb is null: {GunDb is null}");
+		await JSRuntime.InvokeVoidAsync("console.log", $"ListId: {ListId}");
+		await JSRuntime.InvokeVoidAsync("console.log", $"DialogService is null: {DialogService is null}");
+
+		// Store the DialogService reference so it doesn't get lost
+		_dialogServiceReference = DialogService;
+		await JSRuntime.InvokeVoidAsync("console.log", $"DialogService reference stored, is null: {_dialogServiceReference is null}");
+
+		if (GunDb is null || string.IsNullOrWhiteSpace(ListId))
+		{
+			await JSRuntime.InvokeVoidAsync("console.log", "GunDb is null or ListId is empty, returning");
+			return;
+		}
+
+		// Subscribe to current list items
+		await JSRuntime.InvokeVoidAsync("console.log", $"Subscribing to list items for list {ListId}");
+		_listItemsSubscription = await GunDb.SubscribeMapAsync(
+			$"list-items/{ListId}",
+			OnListItemReceivedAsync);
+		await JSRuntime.InvokeVoidAsync("console.log", "List items subscription created");
+
+		// Subscribe to all items from GunDB
+		await JSRuntime.InvokeVoidAsync("console.log", "Subscribing to items map");
+		_itemsSubscription = await GunDb.SubscribeMapAsync("items", OnItemReceivedAsync);
+		await JSRuntime.InvokeVoidAsync("console.log", "Items subscription created");
+	}
+
+	private async Task OnListItemReceivedAsync(string json, string soul)
+	{
+		await JSRuntime.InvokeVoidAsync("console.log", $"OnListItemReceivedAsync called for soul: {soul}");
+
+		// Check if this is a removal (empty json or null ItemId)
+		if (string.IsNullOrWhiteSpace(json))
+		{
+			await JSRuntime.InvokeVoidAsync("console.log", $"Item removed from list (empty json), soul: {soul}");
+			// When removing, the soul is actually the itemId path like "list-items/listId/itemId"
+			// Extract the itemId from the soul
+			var parts = soul.Split('/');
+			if (parts.Length >= 3)
+			{
+				var itemId = parts[^1]; // Get last part
+				_currentListItemIds.Remove(itemId);
+				_selectedItemIds.Remove(itemId);
+				await JSRuntime.InvokeVoidAsync("console.log", $"Removed itemId: {itemId}, Current list items count: {_currentListItemIds.Count}, Selected count: {_selectedItemIds.Count}");
+				StateHasChanged();
+			}
+			return;
+		}
+
+		var link = JsonSerializer.Deserialize<ListItemLink>(json);
+		if (link?.ItemId is null)
+		{
+			await JSRuntime.InvokeVoidAsync("console.log", $"Item removed from list (null ItemId), soul: {soul}");
+			var parts = soul.Split('/');
+			if (parts.Length >= 3)
+			{
+				var itemId = parts[^1];
+				_currentListItemIds.Remove(itemId);
+				_selectedItemIds.Remove(itemId);
+				await JSRuntime.InvokeVoidAsync("console.log", $"Removed itemId: {itemId}, Current list items count: {_currentListItemIds.Count}, Selected count: {_selectedItemIds.Count}");
+				StateHasChanged();
+			}
+			return;
+		}
+
+		var itemId2 = link.ItemId;
+		if (string.IsNullOrWhiteSpace(itemId2))
+		{
+			await JSRuntime.InvokeVoidAsync("console.log", "ItemId from list link is empty");
+			return;
+		}
+
+		await JSRuntime.InvokeVoidAsync("console.log", $"Adding itemId {itemId2} to current list items");
+		_currentListItemIds.Add(itemId2);
+		_selectedItemIds.Add(itemId2);
+		await JSRuntime.InvokeVoidAsync("console.log", $"Current list items count: {_currentListItemIds.Count}, Selected count: {_selectedItemIds.Count}");
+		StateHasChanged();
+	}
+
+	private async Task OnItemReceivedAsync(string json, string soul)
+	{
+		await JSRuntime.InvokeVoidAsync("console.log", $"OnItemReceivedAsync called for soul: {soul}");
+		var item = JsonSerializer.Deserialize<ToDoItem>(json);
+		if (item is null || string.IsNullOrWhiteSpace(item.Title))
+		{
+			await JSRuntime.InvokeVoidAsync("console.log", "Item is null or title is empty");
+			return;
+		}
+
+		var itemId = !string.IsNullOrWhiteSpace(item.Id) ? item.Id : soul;
+		if (string.IsNullOrWhiteSpace(itemId))
+		{
+			await JSRuntime.InvokeVoidAsync("console.log", "ItemId is empty");
+			return;
+		}
+
+		await JSRuntime.InvokeVoidAsync("console.log", $"Adding item {itemId}: {item.Title}");
+		_itemsById[itemId] = item;
+		await UpdateItemsList();
+	}
+
+	private async Task UpdateItemsList()
+	{
+		_items = _itemsById.Values
+			.OrderBy(i => i.Title)
+			.ToList();
+		await JSRuntime.InvokeVoidAsync("console.log", $"Updated items list, now have {_items.Count} items");
+		StateHasChanged();
+	}
+
+	private async Task OnItemCheckedChanged(string itemId, bool isChecked)
+	{
+		await JSRuntime.InvokeVoidAsync("console.log", $"OnItemCheckedChanged: {itemId} = {isChecked}");
+		if (isChecked)
+		{
+			_selectedItemIds.Add(itemId);
+		}
+		else
+		{
+			_selectedItemIds.Remove(itemId);
+		}
+		await JSRuntime.InvokeVoidAsync("console.log", $"Selected items now: {_selectedItemIds.Count}");
+	}
+
+	private async Task SelectAllItems()
+	{
+		await JSRuntime.InvokeVoidAsync("console.log", $"SelectAllItems called, current selection: {_selectedItemIds.Count}/{_items.Count}");
+		if (_selectedItemIds.Count == _items.Count)
+		{
+			_selectedItemIds.Clear();
+			await JSRuntime.InvokeVoidAsync("console.log", "Cleared all selections");
+		}
+		else
+		{
+			_selectedItemIds = new HashSet<string>(_items.Select(i => i.Id));
+			await JSRuntime.InvokeVoidAsync("console.log", $"Selected all {_selectedItemIds.Count} items");
+		}
+		StateHasChanged();
+	}
+
+	private async Task OnAddAsync()
+	{
+		await JSRuntime.InvokeVoidAsync("console.log", "OnAddAsync called");
+		await JSRuntime.InvokeVoidAsync("console.log", $"DialogService reference is null: {_dialogServiceReference is null}");
+		await JSRuntime.InvokeVoidAsync("console.log", $"GunDb is null: {GunDb is null}");
+		await JSRuntime.InvokeVoidAsync("console.log", $"ListId: {ListId}");
+		await JSRuntime.InvokeVoidAsync("console.log", $"Selected items count: {_selectedItemIds.Count}");
+		await JSRuntime.InvokeVoidAsync("console.log", $"Current list items count: {_currentListItemIds.Count}");
+
+		if (_dialogServiceReference is null || GunDb is null || string.IsNullOrWhiteSpace(ListId))
+		{
+			await JSRuntime.InvokeVoidAsync("console.log", "Early return due to null checks");
+			return;
+		}
+
+		_isLoading = true;
+		StateHasChanged();
+
+		try
+		{
+			// Items to add (in selected but not in current)
+			var itemsToAdd = _selectedItemIds.Except(_currentListItemIds).ToList();
+			// Items to remove (in current but not in selected)
+			var itemsToRemove = _currentListItemIds.Except(_selectedItemIds).ToList();
+
+			await JSRuntime.InvokeVoidAsync("console.log", $"Items to add: {itemsToAdd.Count}");
+			foreach (var itemId in itemsToAdd)
+			{
+				await JSRuntime.InvokeVoidAsync("console.log", $"Adding item {itemId} to list {ListId}");
+				await GunDb.PutAsync($"list-items/{ListId}/{itemId}", new ListItemLink { ItemId = itemId });
+				await JSRuntime.InvokeVoidAsync("console.log", $"Item {itemId} added successfully");
+			}
+
+			await JSRuntime.InvokeVoidAsync("console.log", $"Items to remove: {itemsToRemove.Count}");
+			foreach (var itemId in itemsToRemove)
+			{
+				await JSRuntime.InvokeVoidAsync("console.log", $"Removing item {itemId} from list {ListId}");
+				await GunDb.RemoveAsync($"list-items/{ListId}/{itemId}");
+				await JSRuntime.InvokeVoidAsync("console.log", $"Item {itemId} removed successfully");
+			}
+
+			// Allow time for GunDB changes to propagate
+			await JSRuntime.InvokeVoidAsync("console.log", "Waiting 1000ms for GunDB sync...");
+			await Task.Delay(1000);
+
+			await JSRuntime.InvokeVoidAsync("console.log", $"Closing dialog, current list items count: {_currentListItemIds.Count}");
+			_dialogServiceReference.Close(true);
+			await JSRuntime.InvokeVoidAsync("console.log", "Dialog closed");
+			_dialogServiceReference.Close(true);
+			await JSRuntime.InvokeVoidAsync("console.log", "Dialog closed (second call)");
+		}
+		finally
+		{
+			_isLoading = false;
+			StateHasChanged();
+		}
+	}
+
+	private async Task OnCancel()
+	{
+		await JSRuntime.InvokeVoidAsync("console.log", "OnCancel called");
+		if (_dialogServiceReference is not null)
+		{
+			await JSRuntime.InvokeVoidAsync("console.log", "Closing dialog from cancel");
+			_dialogServiceReference.Close(false);
+		}
+		else
+		{
+			await JSRuntime.InvokeVoidAsync("console.log", "DialogService reference is null in OnCancel");
+		}
+	}
+
+	private sealed class ListItemLink
+	{
+		public string ItemId { get; set; } = string.Empty;
+	}
+
+	async ValueTask IAsyncDisposable.DisposeAsync()
+	{
+		if (_itemsSubscription is not null)
+		{
+			await _itemsSubscription.DisposeAsync();
+		}
+		if (_listItemsSubscription is not null)
+		{
+			await _listItemsSubscription.DisposeAsync();
+		}
+	}
+}

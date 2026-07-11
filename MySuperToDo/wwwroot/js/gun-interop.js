@@ -434,10 +434,26 @@ export function unsubscribe(path) {
  * the same path — each gets its own .map().on() and therefore its own initial replay.
  */
 export function subscribeMap(subscriptionId, path, dotNetRef, callbackMethod) {
-    const node = getNode(path).map().on((data, soul) => {
-        // Skip null, non-objects, and GunDB soul-reference objects {#: "soul"}
-        if (data == null || typeof data !== 'object' || '#' in data) return;
+    const seenSouls = new Set(); // Track which souls we've seen to detect deletions
 
+    const node = getNode(path).map().on((data, soul) => {
+        // Handle null data first (before using 'in' operator)
+        if (data == null) {
+            if (seenSouls.has(soul)) {
+                // This is a real deletion - pass empty string to signal removal
+                invokeDotNetCallback(dotNetRef, callbackMethod, '', soul, '[GunDB] map callback error:');
+            }
+            // If we haven't seen this soul before, skip it (initial empty state)
+            return;
+        }
+
+        // Skip GunDB soul-reference objects {#: "soul"}
+        if (typeof data !== 'object' || '#' in data) return;
+
+        // Remember this soul for future deletion detection
+        seenSouls.add(soul);
+
+        // Pass the data back to .NET
         invokeDotNetCallback(dotNetRef, callbackMethod, JSON.stringify(data), soul, '[GunDB] map callback error:');
     });
 
