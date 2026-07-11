@@ -19,7 +19,7 @@ The development process was very different for me. I really wanted to learn how 
 Copilot even wrote the JSInterop code to connect Blazor to GunDB. It was pretty amazing to see it work on the first try.
 
 Run the app here:
-https://<username>.github.io/MySuperToDo/
+https://ellipsis-apps.github.io/MySuperToDo/
 
 ## 📌 Overview
 
@@ -80,7 +80,9 @@ Your relay might be hosted on a Raspberry Pi or VPS.
 The relay stores encrypted data but **cannot decrypt it** — all encryption happens client‑side.
 Instructions for setting up a relay are included in the `gundb` folder of the repository.
 
-The app as loaded from github does not point to a relay, so your data will be local ONLY to the browser you use to load MySuperToDo. You can use the user settings page (dropdown from the usr icon) to enter a relay to use. I have a relay set up in my home office running on my Raspberry Pi. Setting it up was, well, as easy as pie...
+The app as loaded from github points to a relay at https://gundb-demo.ellipsis-apps.com/gun. This is an open relay site I've set up for demo purposes.
+
+**NOTE: To prevent over charges the data at this relay is automatically deleted at the end of every month. So if you want to use a relay for your own purposes, you will need to set up your own relay, build the app and use your own relay address in th appsettings.json file.**
 
 ## 🧪 Running the App Locally
 
