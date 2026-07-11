@@ -23,6 +23,257 @@ function getNode(path) {
     return path.split('/').reduce((node, part) => node.get(part), _reticle);
 }
 
+/**
+ * Returns the current authenticated user's pair as a plain JSON string (pub/epub/priv/epriv)
+ * without performing any encryption/decryption. This helps display the actual
+ * key material for verification when exporting.
+ */
+export function getCurrentUserPairPlain() {
+    if (!_gun) throw new Error('Gun is not initialised');
+    const user = _gun.user();
+    const pair = user && typeof user.pair === 'function' ? user.pair() : (user && user.pair) ? user.pair : null;
+    const result = {};
+    if (pair) {
+        try {
+            // common keys
+            ['pub', 'epub', 'priv', 'epriv', 's'].forEach(k => {
+                try {
+                    if (pair[k] !== undefined && typeof pair[k] !== 'function') result[k] = pair[k];
+                    else if (typeof pair[k] === 'function') {
+                        try { const v = pair[k](); if (v !== undefined) result[k] = v; } catch { }
+                    }
+                } catch { }
+            });
+        } catch { }
+        // fallback: copy own properties
+        try {
+            Object.getOwnPropertyNames(pair).forEach(k => {
+                try {
+                    if (result[k] === undefined) {
+                        const v = pair[k];
+                        if (typeof v !== 'function') result[k] = v;
+                    }
+                } catch { }
+            });
+        } catch { }
+    }
+    // Try to read from user._?.sea if available
+    try {
+        if ((!result.pub || result.pub === undefined) && user && user._ && user._.sea) {
+            const sea = user._.sea;
+            ['pub', 'epub', 'priv', 'epriv', 's'].forEach(k => {
+                try { if (sea[k] !== undefined) result[k] = sea[k]; } catch { }
+            });
+        }
+    } catch { }
+
+    return Object.keys(result).length === 0 ? null : JSON.stringify(result);
+}
+
+/**
+ * Probe a list of peer URLs to verify basic reachability by attempting a WebSocket
+ * handshake. Returns a JSON string array of results: [{ url, ok, message }]
+ *
+ * Note: some peers may not accept direct websocket connections or may require
+ * different paths; this probe is a best-effort check from the browser runtime.
+ */
+export async function probePeers(peers, timeoutMs) {
+    if (!peers || peers.length === 0) return JSON.stringify([]);
+    const results = await Promise.all(peers.map(p => probeSinglePeer(p, timeoutMs || 3000)));
+    return JSON.stringify(results);
+}
+
+function probeSinglePeer(peerUrl, timeoutMs) {
+    return new Promise(resolve => {
+        const normalize = (u) => {
+            try {
+                // If already ws/wss, keep it
+                if (u.startsWith('ws:') || u.startsWith('wss:')) return u;
+                // convert http(s) -> ws(s)
+                if (u.startsWith('https:')) return u.replace(/^https:/, 'wss:');
+                if (u.startsWith('http:')) return u.replace(/^http:/, 'ws:');
+                // If no scheme, try ws fallback
+                return 'ws://' + u;
+            } catch { return u; }
+        };
+
+        const wsUrl = normalize(peerUrl);
+        let settled = false;
+        let ws;
+        try {
+            ws = new WebSocket(wsUrl);
+        } catch (err) {
+            resolve({ url: peerUrl, ok: false, message: String(err) });
+            return;
+        }
+
+        const to = setTimeout(() => {
+            if (!settled) {
+                settled = true;
+                try { ws.close(); } catch { }
+                resolve({ url: peerUrl, ok: false, message: 'timeout' });
+            }
+        }, timeoutMs || 3000);
+
+        ws.onopen = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(to);
+            try { ws.close(); } catch { }
+            resolve({ url: peerUrl, ok: true, message: 'open' });
+        };
+
+        ws.onerror = (ev) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(to);
+            try { ws.close(); } catch { }
+            resolve({ url: peerUrl, ok: false, message: 'error' });
+        };
+
+        ws.onclose = (ev) => {
+            if (settled) return;
+            // closed before open -> treat as unreachable
+            settled = true;
+            clearTimeout(to);
+            resolve({ url: peerUrl, ok: false, message: 'closed' });
+        };
+    });
+}
+
+/**
+ * Decrypts an encrypted export blob with the provided password and returns the
+ * decrypted payload as a JSON string. This does NOT authenticate the user; it
+ * only returns the underlying pair/alias payload for display/verification.
+ */
+export async function decryptEncryptedPair(encryptedPayload, password) {
+    if (!_gun) throw new Error('Gun is not initialised');
+    try {
+        let decrypted = encryptedPayload;
+        try { decrypted = JSON.parse(encryptedPayload); } catch { /* could be raw SEA string */ }
+
+        const payload = await SEA.decrypt(decrypted, password);
+        if (!payload) throw new Error('Decryption failed or invalid payload');
+
+        // Ensure pair inside the payload is represented as a plain object
+        if (payload && payload.pair) {
+            const p = payload.pair;
+            const plain = {};
+            try {
+                Object.getOwnPropertyNames(p).forEach(k => {
+                    try {
+                        const v = p[k];
+                        if (typeof v !== 'function') plain[k] = v;
+                    } catch { }
+                });
+            } catch { }
+            payload.pair = plain;
+        }
+
+        return typeof payload === 'string' ? payload : JSON.stringify(payload);
+    }
+    catch (err) {
+        throw err;
+    }
+}
+
+/**
+ * Export the current user's keypair encrypted with the provided password.
+ * Returns a string (encrypted payload) that can be copied between browsers.
+ */
+export async function exportEncryptedPair(password) {
+    if (!_gun) throw new Error('Gun is not initialised');
+    const user = _gun.user();
+    const pair = user && user.pair ? user.pair() : null;
+    if (!pair) throw new Error('No authenticated user pair available');
+    // Try to capture the current alias (username) if available to help import.
+    const alias = (user && user.is && user.is.alias) ? user.is.alias : null;
+    // Create a plain serializable copy of the pair. Gun/SEA pair objects may
+    // expose properties as non-enumerable or via getters; try multiple
+    // strategies to extract useful key material (pub, priv, epriv, epub, etc.).
+    const serializablePair = {};
+
+    // First, copy any own property names that are not functions
+    try {
+        Object.getOwnPropertyNames(pair).forEach(k => {
+            try {
+                const v = pair[k];
+                if (typeof v !== 'function') serializablePair[k] = v;
+            } catch { /* ignore property access errors */ }
+        });
+    } catch { /* ignore */ }
+
+    // Next, attempt to copy commonly present SEA key names directly (access via getters)
+    try {
+        [ 'pub', 'epub', 'priv', 'epriv', 's', 'x', 'y' ].forEach(k => {
+            try {
+                if ((serializablePair[k] === undefined) && (pair[k] !== undefined) && (typeof pair[k] !== 'function')) {
+                    serializablePair[k] = pair[k];
+                }
+            } catch { }
+        });
+    } catch { }
+
+    // As a last resort, try for-in to pick up enumerable inherited props
+    try {
+        for (const k in pair) {
+            try {
+                if (serializablePair[k] === undefined) {
+                    const v = pair[k];
+                    if (typeof v !== 'function') serializablePair[k] = v;
+                }
+            } catch { }
+        }
+    } catch { }
+
+    const payload = { pair: serializablePair, alias };
+    // Use SEA to encrypt the payload with the provided password
+    try {
+        const encrypted = await SEA.encrypt(payload, password);
+        return typeof encrypted === 'string' ? encrypted : JSON.stringify(encrypted);
+    }
+    catch (err) {
+        throw err;
+    }
+}
+
+/**
+ * Import an encrypted keypair blob (as produced by exportEncryptedPair) and authenticate
+ * the local Gun user with the decrypted pair. Resolves true on success.
+ */
+export async function importEncryptedPair(encryptedPayload, password) {
+    if (!_gun) throw new Error('Gun is not initialised');
+    try {
+        // Try to parse JSON, but allow raw strings too
+        let decrypted = encryptedPayload;
+        try { decrypted = JSON.parse(encryptedPayload); } catch { /* ignore - could be raw SEA string */ }
+
+        // SEA.decrypt will return the original payload object we encrypted earlier
+        const payload = await SEA.decrypt(decrypted, password);
+        if (!payload) throw new Error('Decryption failed or invalid payload');
+
+        const pair = payload.pair ?? payload; // support cases where a raw pair was encrypted
+        const alias = payload.alias ?? null;
+
+        return await new Promise((resolve, reject) => {
+            _gun.user().auth(pair, ack => {
+                if (ack && ack.err) {
+                    // Common failure: "User cannot be found" when the alias mapping isn't available on the network.
+                    if (String(ack.err).includes('User cannot be found')) {
+                        reject(new Error("User cannot be found! Ensure the original user record has been published to your Gun peers and that peers are reachable before importing. You can also try importing after connecting to the same relay peers used by the original browser."));
+                        return;
+                    }
+                    reject(new Error(ack.err));
+                }
+                else resolve(true);
+            });
+        });
+    }
+    catch (err) {
+        throw err;
+    }
+}
+
 function invokeDotNetCallback(dotNetRef, callbackMethod, json, soul, errorLabel) {
     if (_disposed) {
         return;
@@ -54,11 +305,22 @@ function invokeDotNetCallback(dotNetRef, callbackMethod, json, soul, errorLabel)
  */
 export function initialize(peers, appScope) {
     _disposed = false;
-    const opts = {};
+    // Disable any built-in browser persistence (localStorage / IndexedDB/radisk)
+    // to ensure GunDB does not attempt to use IndexedDB or localStorage in this app.
+    const opts = {
+        localStorage: true
+    };
     if (peers && peers.length > 0) {
         opts.peers = peers;
     }
-    _gun = Gun(opts);
+    try {
+        console.debug('[GunInterop] initialize peers:', peers);
+        _gun = Gun(opts);
+    }
+    catch (err) {
+        console.error('[GunInterop] initialize error', err);
+        throw err;
+    }
     // The reticle: every operation in this wrapper is anchored to this node.
     _reticle = _gun.get(appScope);
 }
@@ -67,6 +329,7 @@ export function initialize(peers, appScope) {
  * Reinitializes the Gun instance with a new peer list while preserving the app reticle.
  */
 export function reinitialize(peers, appScope) {
+    console.debug('[GunInterop] reinitialize peers:', peers);
     disposeAll();
     initialize(peers, appScope);
 }
@@ -108,6 +371,36 @@ export function getOnceAsync(path) {
 }
 
 /**
+ * Checks whether the reticle at appScope contains any data.
+ * Returns true when the node is non-null.
+ */
+export function reticleExists(appScope) {
+    if (!_gun) return Promise.resolve(false);
+    return new Promise((resolve) => {
+        _gun.get(appScope).once(data => resolve(data != null));
+    });
+}
+
+/**
+ * Create a new Gun user (username/password).
+ * Resolves when the create ack is successful, rejects on error.
+ */
+export function createUser(username, password) {
+    return new Promise((resolve, reject) => {
+        if (!_gun) return reject(new Error('Gun is not initialised'));
+        try {
+            _gun.user().create(username, password, ack => {
+                if (ack && ack.err) reject(new Error(ack.err));
+                else resolve(ack);
+            });
+        }
+        catch (err) {
+            reject(err);
+        }
+    });
+}
+
+/**
  * Subscribes to live changes at the nested path.
  * Invokes dotNetRef[callbackMethod](json, soul) on every change.
  * Replaces any existing subscription at the same path.
@@ -141,10 +434,26 @@ export function unsubscribe(path) {
  * the same path — each gets its own .map().on() and therefore its own initial replay.
  */
 export function subscribeMap(subscriptionId, path, dotNetRef, callbackMethod) {
-    const node = getNode(path).map().on((data, soul) => {
-        // Skip null, non-objects, and GunDB soul-reference objects {#: "soul"}
-        if (data == null || typeof data !== 'object' || '#' in data) return;
+    const seenSouls = new Set(); // Track which souls we've seen to detect deletions
 
+    const node = getNode(path).map().on((data, soul) => {
+        // Handle null data first (before using 'in' operator)
+        if (data == null) {
+            if (seenSouls.has(soul)) {
+                // This is a real deletion - pass empty string to signal removal
+                invokeDotNetCallback(dotNetRef, callbackMethod, '', soul, '[GunDB] map callback error:');
+            }
+            // If we haven't seen this soul before, skip it (initial empty state)
+            return;
+        }
+
+        // Skip GunDB soul-reference objects {#: "soul"}
+        if (typeof data !== 'object' || '#' in data) return;
+
+        // Remember this soul for future deletion detection
+        seenSouls.add(soul);
+
+        // Pass the data back to .NET
         invokeDotNetCallback(dotNetRef, callbackMethod, JSON.stringify(data), soul, '[GunDB] map callback error:');
     });
 

@@ -27,8 +27,9 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
     ///   <item>Not found → creates user + default list, returns the user.</item>
     /// </list>
     /// Returns <c>(User, null)</c> on success or <c>(null, errorMessage)</c> on failure.
+    /// The boolean indicates whether the user was newly created.
     /// </summary>
-    public async Task<(User? User, string? Error)> SignInOrRegisterAsync(
+    public async Task<(User? User, string? Error, bool Created)> SignInOrRegisterAsync(
         string username, string password, CancellationToken cancellationToken = default)
     {
         var existing = await gun.GetOnceAsync<User>(UserPath(username), cancellationToken);
@@ -42,12 +43,12 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
         if (existing is not null)
         {
             if (!passwordHasher.VerifyPassword(password, existing.PasswordHash))
-                return (null, "Invalid username or password.");
+                return (null, "Invalid username or password.", false);
 
             existing.LastLoginAt = DateTime.UtcNow;
             existing = await EnsureDefaultListAsync(existing, cancellationToken);
             await gun.PutAsync(UserPath(username), existing, cancellationToken);
-            return (existing, null);
+            return (existing, null, false);
         }
 
         var newUser = new User
@@ -61,7 +62,7 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
 
         newUser = await EnsureDefaultListAsync(newUser, cancellationToken);
         await gun.PutAsync(UserPath(username), newUser, cancellationToken);
-        return (newUser, null);
+        return (newUser, null, true);
     }
 
     private async Task CleanupCorruptedUserAsync(string username, CancellationToken cancellationToken)

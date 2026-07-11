@@ -11,22 +11,15 @@
 	}
 
 	<RadzenText TextStyle="TextStyle.Body1">
-		No relay servers were found. Enter one or more relay URLs below, one per line.
+		Relay URLs are loaded from app settings and cannot be changed here.
 	</RadzenText>
 
-	<textarea class="form-control"
-			  rows="5"
-			  placeholder="http://your-relay:8765/gun"
-			  @bind="_relayServersText"></textarea>
+	<RadzenTextArea Value="@_relayServersText"
+					ReadOnly="true"
+					Style="width: 100%; min-height: 8rem;" />
 
 	<RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
-		<RadzenButton Text="Save"
-					  Icon="save"
-					  ButtonStyle="ButtonStyle.Primary"
-					  Click="@SaveAsync"
-					  IsBusy="@_isSaving"
-					  BusyText="Saving..." />
-		<RadzenButton Text="Cancel"
+		<RadzenButton Text="Close"
 					  Icon="close"
 					  ButtonStyle="ButtonStyle.Light"
 					  Click="@Cancel" />

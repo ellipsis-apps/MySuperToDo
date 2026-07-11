@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.JSInterop;
 
 using MySuperToDo.Application.Interfaces;
@@ -37,6 +38,21 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
     {
         _js = js;
         _appScope = configuration["GunDB:AppScope"] ?? "mysupertodo";
+        _peers = configuration.GetSection("GunDB:MyPeers").Get<string[]>() ?? [];
+    }
+
+    public async Task<bool> ReticleExistsAsync(CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync(cancellationToken);
+        try
+        {
+            return await module.InvokeAsync<bool>("reticleExists", cancellationToken, _appScope);
+        }
+        catch (JSException)
+        {
+            // If JS is unavailable or the module fails, conservatively assume no reticle.
+            return false;
+        }
     }
 
     private async ValueTask<IJSObjectReference> GetModuleAsync(CancellationToken cancellationToken = default)
