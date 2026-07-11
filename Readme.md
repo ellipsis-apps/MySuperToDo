@@ -82,7 +82,7 @@ Instructions for setting up a relay are included in the `gundb` folder of the re
 
 The app as loaded from github points to a relay at https://gundb-demo.ellipsis-apps.com/gun. This is an open relay site I've set up for demo purposes.
 
-**NOTE: To prevent over charges the data at this relay is automatically deleted at the end of every month. So if you want to use a relay for your own purposes, you will need to set up your own relay, build the app and use your own relay address in th appsettings.json file.**
+**NOTE: To prevent over charges the data at this relay is automatically deleted at the end of every month. So if you want to use a relay for your own purposes, you will need to set up your own relay, build the app and use your own relay address in th appsettings.json file.**  
 
 ## 🧪 Running the App Locally
 
