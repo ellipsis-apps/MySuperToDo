@@ -1,0 +1,127 @@
+@page "/database/sync"
+@using Microsoft.AspNetCore.Components
+@using System.ComponentModel.DataAnnotations
+@inject NavigationManager Navigation
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject IJSRuntime JS
+
+<PageTitle>Sync Database</PageTitle>
+
+<div class="d-flex justify-content-center mt-5">
+	<div class="col-12 col-sm-8 col-md-6 col-lg-4">
+		<RadzenCard>
+			<h4>Sync with existing database</h4>
+			<EditForm Model="model" OnValidSubmit="HandleValidSubmit">
+				<DataAnnotationsValidator />
+				<ValidationSummary />
+
+				<div class="mb-2">
+					<label>Encrypted Seed</label>
+					<InputTextArea class="form-control" @bind-Value="model.EncryptedSeed" />
+				</div>
+
+				<div class="mb-2">
+					<label>Password</label>
+					<InputText class="form-control" @bind-Value="model.Password" type="password" />
+				</div>
+
+				<div class="d-flex justify-content-between">
+				<button class="btn btn-primary" type="submit">Unlock & Sync</button>
+				<button class="btn btn-secondary" type="button" @onclick="CheckPeers">Check peers</button>
+					<div class="text-danger">@status</div>
+				</div>
+			</EditForm>
+		</RadzenCard>
+	</div>
+</div>
+
+@code {
+	private SyncModel model = new();
+	private string status = string.Empty;
+
+	private async Task HandleValidSubmit()
+	{
+		status = string.Empty;
+		try
+		{
+			var module = await JS.InvokeAsync<IJSObjectReference>("import", (object)"./js/gun-interop.js");
+			var appScope = "mysupertodo"; // use configured scope if available elsewhere
+
+			// Read peers from appsettings.json and initialize Gun with them
+			var peers = Configuration.GetSection("GunDB:MyPeers").Get<string[]>() ?? Array.Empty<string>();
+			if (peers.Length == 0)
+			{
+				status = "No GunDB relay peers are configured (appsettings.json -> GunDB:MyPeers).";
+				return;
+			}
+
+			await module.InvokeVoidAsync("initialize", peers, appScope);
+
+			// Normalize payload (convert any \u0022 escapes back to ") then import and authenticate with the encrypted seed
+			var normalized = NormalizeSeed(model.EncryptedSeed);
+			// Ensure password is trimmed of accidental whitespace
+			var password = model.Password?.Trim() ?? string.Empty;
+			var result = await module.InvokeAsync<bool>("importEncryptedPair", normalized, password);
+			if (result)
+			{
+				status = "Sync successful. Redirecting to login...";
+				await Task.Delay(600);
+				Navigation.NavigateTo("/");
+			}
+			else
+			{
+				status = "Failed to import seed.";
+			}
+		}
+		catch (JSException jex)
+		{
+			status = "Import failed: " + jex.Message;
+		}
+		catch (Exception ex)
+		{
+			status = "Import failed: " + ex.Message;
+		}
+	}
+
+	private async Task CheckPeers()
+	{
+		status = string.Empty;
+		try
+		{
+			var peers = Configuration.GetSection("GunDB:MyPeers").Get<string[]>() ?? Array.Empty<string>();
+			if (peers.Length == 0)
+			{
+				status = "No peers configured in appsettings.json";
+				return;
+			}
+
+			var module = await JS.InvokeAsync<IJSObjectReference>("import", (object)"./js/gun-interop.js");
+			var json = await module.InvokeAsync<string>("probePeers", (object)peers, 3000);
+			status = "Peer check: " + json;
+		}
+		catch (Exception ex)
+		{
+			status = "Peer check failed: " + ex.Message;
+		}
+	}
+
+	private static string NormalizeSeed(string seed)
+	{
+		if (string.IsNullOrWhiteSpace(seed))
+		{
+			return string.Empty;
+		}
+
+		return seed.Trim().Replace("\\u0022", "\"");
+	}
+
+	private sealed class SyncModel
+	{
+		[Required]
+		public string EncryptedSeed { get; set; } = string.Empty;
+
+		[Required]
+		public string Password { get; set; } = string.Empty;
+	}
+
+}

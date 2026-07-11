@@ -557,25 +557,84 @@ public partial class Lists : IAsyncDisposable
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task OnListMembershipReceivedAsync(string listId, string json, string soul)
     {
-        var link = JsonSerializer.Deserialize<ListItemLink>(json);
-        var itemId = !string.IsNullOrWhiteSpace(link?.ItemId) ? link!.ItemId : soul;
-        if (string.IsNullOrWhiteSpace(itemId))
+        // Detailed logging to understand what's happening
+        var jsonIsNull = json == null;
+        var jsonLength = json?.Length ?? 0;
+        var jsonCodes = jsonIsNull ? "NULL" : string.Join(",", json.Take(20).Select(c => (int)c));
+
+        await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### OnListMembershipReceivedAsync START: listId={listId}, soul={soul}, null={jsonIsNull}, len={jsonLength}, codes=[{jsonCodes}]");
+
+        // Check if the item is being removed (empty json means deletion)
+        if (string.IsNullOrWhiteSpace(json))
         {
+            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### REMOVAL CODE PATH: Handling deletion");
+
+            // When removing via subscribeMap, the soul is just the item ID, not the full path
+            // The listId is already provided as a parameter
+            var itemId = soul; // The soul IS the itemId in this case
+            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Removing itemId={itemId} from listId={listId}");
+
+            if (_itemIdsByListId.TryGetValue(listId, out var itemIds))
+            {
+                var itemsBeforeCount = itemIds.Count;
+                var removed = itemIds.Remove(itemId);
+                var itemsAfterCount = itemIds.Count;
+                await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Item removal: removed={removed}, before={itemsBeforeCount}, after={itemsAfterCount}");
+                await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Remaining itemIds: {string.Join(", ", itemIds)}");
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### ERROR: listId {listId} not in _itemIdsByListId! Available: {string.Join(", ", _itemIdsByListId.Keys)}");
+            }
+
+            // Force complete tree re-render by setting to null first, then rebuilding
+            _treeData = null;
+            await InvokeAsync(StateHasChanged);
+
+            RebuildTree();
+            await InvokeAsync(StateHasChanged);
+            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### REMOVAL CODE PATH: Complete");
             return;
         }
-        if (!_itemIdsByListId.TryGetValue(listId, out var itemIds))
+
+        try
         {
-            itemIds = [];
-            _itemIdsByListId[listId] = itemIds;
+            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### NORMAL ADD PATH: Deserializing");
+            var link = JsonSerializer.Deserialize<ListItemLink>(json);
+
+            if (link?.ItemId is null)
+            {
+                // This shouldn't happen with normal GunDB data, but handle it just in case
+                await JSRuntime.InvokeVoidAsync("console.log", $"WARNING: Received null ItemId in link for soul={soul}");
+                return;
+            }
+
+            var itemId2 = link.ItemId;
+            if (string.IsNullOrWhiteSpace(itemId2))
+            {
+                return;
+            }
+
+            await JSRuntime.InvokeVoidAsync("console.log", $"Adding itemId={itemId2} to listId={listId}");
+
+            if (!_itemIdsByListId.TryGetValue(listId, out var itemIdsToAdd))
+            {
+                itemIdsToAdd = [];
+                _itemIdsByListId[listId] = itemIdsToAdd;
+            }
+            itemIdsToAdd.Add(itemId2);
+            if (!_itemSubscriptionsById.Contains(itemId2))
+            {
+                await GunDb.SubscribeAsync($"items/{itemId2}", (itemJson, _) => OnItemReceivedAsync(itemId2, itemJson));
+                _itemSubscriptionsById.Add(itemId2);
+            }
+            RebuildTree();
+            await InvokeAsync(StateHasChanged);
         }
-        itemIds.Add(itemId);
-        if (!_itemSubscriptionsById.Contains(itemId))
+        catch (Exception ex)
         {
-            await GunDb.SubscribeAsync($"items/{itemId}", (itemJson, _) => OnItemReceivedAsync(itemId, itemJson));
-            _itemSubscriptionsById.Add(itemId);
+            await JSRuntime.InvokeVoidAsync("console.log", $"ERROR in OnListMembershipReceivedAsync: {ex.Message}");
         }
-        RebuildTree();
-        await InvokeAsync(StateHasChanged);
     }
 
     /// <summary>
@@ -613,6 +672,7 @@ public partial class Lists : IAsyncDisposable
             SuppressDragIcon = true,
             Children = []  // Root node has children
         };
+
         var nestedListIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var childIds in _childListIdsByParentId.Values)
         {
@@ -888,7 +948,8 @@ public partial class Lists : IAsyncDisposable
             :
             [
                 new ContextMenuItem { Text = "Add/Edit a List", Value = "list", Icon = "list" },
-                new ContextMenuItem { Text = "Add/Edit a To Do item", Value = "todo", Icon = "edit" },
+                new ContextMenuItem { Text = "Add/Remove Items From List", Value = "add-remove-existing", Icon = "add", Disabled = !isList },
+                new ContextMenuItem { Text = "Add/Edit new ToDo item", Value = "todo", Icon = "edit" },
                 new ContextMenuItem { Text = "Delete To Do Item", Value = "delete-todo", Icon = "delete", Disabled = !isTodo },
                 new ContextMenuItem { Text = "Delete List", Value = "delete-list", Icon = "delete", Disabled = !isList }
             ];
@@ -910,6 +971,9 @@ public partial class Lists : IAsyncDisposable
         {
             case "list":
                 await OpenListDetailAsync(_contextNode);
+                break;
+            case "add-remove-existing":
+                await OpenAddExistingItemsDialogAsync(_contextNode);
                 break;
             case "todo":
                 await OpenTodoItemDetailAsync(_contextNode);
@@ -1083,6 +1147,32 @@ public partial class Lists : IAsyncDisposable
             "To Do List Detail",
             parameters,
             new DialogOptions { Width = "420px", ShowClose = true, CloseDialogOnOverlayClick = false });
+    }
+
+    /// <summary>
+    /// Opens the detail dialog for a ToDo item asynchronously.
+    /// Passes the list context and existing item data if available.
+    /// </summary>
+    /// <param name="node">The tree node representing the item.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task OpenAddExistingItemsDialogAsync(TreeNode node)
+    {
+        if (node.IsTodoItem || string.IsNullOrWhiteSpace(node.Id))
+        {
+            return;
+        }
+
+        var parameters = new Dictionary<string, object>
+        {
+            { "ListId", node.Id },
+            { "GunDb", GunDb },
+            { "DialogService", DialogService }
+        };
+
+        await DialogService.OpenAsync<SelectExistingItemsDialog>(
+            "Add Items to List",
+            parameters,
+            new DialogOptions { Width = "500px", ShowClose = true, CloseDialogOnOverlayClick = false });
     }
 
     /// <summary>

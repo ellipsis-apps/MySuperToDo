@@ -1,0 +1,152 @@
+﻿@page "/register"
+@namespace MySuperToDo.Pages.User
+@using System.Net.Http.Json
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Forms
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+@using Blazored.LocalStorage
+@using MySuperToDo.Domain.Constants
+@inject ILocalStorageService LocalStorage
+
+<div class="d-flex justify-content-center align-items-center" style="min-height:70vh;">
+	<RadzenCard Style="width:420px;">
+		<div class="px-3 py-2">
+			<h3 class="text-center mb-3">Register</h3>
+
+			<EditForm Model="model" OnValidSubmit="HandleValidSubmit">
+				<DataAnnotationsValidator />
+				<ValidationSummary />
+
+				<div class="mb-2">
+					<label>Username</label>
+					<InputText class="form-control" @bind-Value="model.Username" />
+					<ValidationMessage For="() => model.Username" />
+				</div>
+
+				<div class="mb-2">
+					<label>Password</label>
+					<div class="input-group">
+						<input class="form-control" type="@(_showPassword ? "text" : "password")" @bind="model.Password" />
+						<button class="btn btn-outline-secondary" type="button" @onclick="TogglePassword">
+							@(_showPassword ? "Hide" : "Show")
+						</button>
+					</div>
+					<ValidationMessage For="() => model.Password" />
+				</div>
+
+				<div class="mb-2">
+					<label>Confirm password</label>
+					<div class="input-group">
+						<input class="form-control" type="@(_showConfirmPassword ? "text" : "password")" @bind="model.ConfirmPassword" />
+						<button class="btn btn-outline-secondary" type="button" @onclick="ToggleConfirmPassword">
+							@(_showConfirmPassword ? "Hide" : "Show")
+						</button>
+					</div>
+					<ValidationMessage For="() => model.ConfirmPassword" />
+				</div>
+
+				<div class="d-flex justify-content-between align-items-center">
+					<button type="submit" class="btn btn-primary">Register</button>
+					<div class="text-danger">@status</div>
+				</div>
+			</EditForm>
+		</div>
+	</RadzenCard>
+</div>
+
+@code {
+	private RegisterModel model = new();
+	private string status = string.Empty;
+	private bool _showPassword = false;
+	private bool _showConfirmPassword = false;
+
+	private async Task HandleValidSubmit()
+	{
+		status = string.Empty;
+
+		if (string.IsNullOrWhiteSpace(model.Username) || model.Username.Length < 8)
+		{
+			status = "Username must be at least 8 characters.";
+			return;
+		}
+
+		if (string.IsNullOrEmpty(model.Password) || model.Password.Length < 8)
+		{
+			status = "Password must be at least 8 characters.";
+			return;
+		}
+
+		if (model.Password != model.ConfirmPassword)
+		{
+			status = "Passwords do not match.";
+			return;
+		}
+
+		try
+		{
+			// Read the configured peers list from appsettings.json property "GunDB:MyPeers".
+			var peers = Configuration.GetSection("GunDB:MyPeers").Get<string[]>() ?? Array.Empty<string>();
+			if (peers.Length == 0)
+			{
+				// No relay configured — inform the user but still attempt local registration.
+				status = "No GunDB relay configured; registration will be local-only.";
+			}
+
+			// initialize gun and create user via the JS module (imported ES module)
+			// pass the full peers array so Gun can attempt all configured relays
+			var module = await JS.InvokeAsync<IJSObjectReference>("import", (object)"./js/gun-interop.js");
+			var appScope = Configuration["GunDB:AppScope"] ?? "mysupertodo";
+			await module.InvokeVoidAsync("initialize", (object)peers, appScope);
+			await module.InvokeAsync<object>("createUser", model.Username, model.Password);
+
+			// Export the encrypted seed (encrypted with the user's password) and persist locally
+			try
+			{
+				var encryptedSeed = await module.InvokeAsync<string>("exportEncryptedPair", model.Password);
+				if (!string.IsNullOrWhiteSpace(encryptedSeed))
+				{
+					// Normalize escaped unicode sequences (e.g. \u0022) into real characters for storage and display
+					var normalized = NormalizeSeed(encryptedSeed);
+					await LocalStorage.SetItemAsync(GunDbConstants.EncryptedSeedKeyName, normalized);
+				}
+			}
+			catch (JSException jsEx)
+			{
+				// If exporting the seed fails, surface the message but continue to login
+				Console.Error.WriteLine($"Failed to export encrypted seed: {jsEx.Message}");
+			}
+
+			status = "Registration successful. Redirecting...";
+			await Task.Delay(600);
+			// Navigate to the login page (Home)
+			Navigation.NavigateTo("/");
+		}
+		catch (JSException jsex)
+		{
+			status = "Registration failed: " + jsex.Message;
+		}
+		catch (Exception ex)
+		{
+			status = "Registration failed: " + ex.Message;
+		}
+
+	}
+
+	private void TogglePassword() => _showPassword = !_showPassword;
+	private void ToggleConfirmPassword() => _showConfirmPassword = !_showConfirmPassword;
+
+	/// <summary>
+	/// Replace common escaped Unicode sequences produced by some JS serializers
+	/// (e.g. "\\u0022" for quotes) with their real characters so the
+	/// encrypted seed displays and imports correctly.
+	/// </summary>
+	private static string NormalizeSeed(string seed)
+	{
+		if (string.IsNullOrEmpty(seed)) return seed;
+		return seed.Replace("\\u0022", "\"");
+	}
+}

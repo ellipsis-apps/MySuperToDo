@@ -1,0 +1,97 @@
+@page "/export-backup"
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Export Encrypted Backup</PageTitle>
+
+<div class="row justify-content-center mt-5">
+	<div class="col-12 col-sm-10 col-md-8 col-lg-6">
+		<RadzenCard>
+			<h4>Export Encrypted Backup</h4>
+			<p class="text-muted">Save the encrypted seed below and keep it in a safe place. It is required to restore this account on another device.</p>
+
+			@if (_loading)
+			{
+				<RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+			}
+			else if (!string.IsNullOrEmpty(_error))
+			{
+				<RadzenAlert AlertStyle="AlertStyle.Danger">@_error</RadzenAlert>
+			}
+			else
+			{
+				<div class="mb-2">
+					<label class="form-label">Username</label>
+					<input class="form-control" readonly value="@_username" />
+				</div>
+
+				<div class="mb-2">
+					<label class="form-label">Password (reminder)</label>
+					<input class="form-control" readonly value="@_password" />
+				</div>
+
+				<div class="mb-2">
+					<label class="form-label">Encrypted Seed (copy and save)</label>
+					<textarea class="form-control" rows="6" readonly>@_encryptedSeed</textarea>
+				</div>
+
+				<RadzenStack Gap="0.5rem">
+					<RadzenButton Text="Copy to Clipboard" Click="CopyToClipboard" ButtonStyle="ButtonStyle.Primary" />
+					<RadzenButton Text="Done" Click="Done" ButtonStyle="ButtonStyle.Secondary" />
+				</RadzenStack>
+			}
+		</RadzenCard>
+	</div>
+</div>
+
+@code {
+	private bool _loading = true;
+	private string? _error;
+	private string? _username;
+	private string? _password;
+	private string? _encryptedSeed;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			_username = await JS.InvokeAsync<string?>("sessionStorage.getItem", "exportUsername");
+			_password = await JS.InvokeAsync<string?>("sessionStorage.getItem", "exportPassword");
+
+			if (string.IsNullOrEmpty(_password))
+			{
+				_error = "No exported password found. Please sign up again to generate an export.";
+				_loading = false;
+				return;
+			}
+
+			// Generate an encrypted seed using the password
+			_encryptedSeed = await JS.InvokeAsync<string>("backup.generateEncryptedSeed", _password);
+		}
+		catch (JSException ex)
+		{
+			_error = ex.Message;
+		}
+		finally
+		{
+			_loading = false;
+		}
+	}
+
+	private async Task CopyToClipboard()
+	{
+		if (!string.IsNullOrEmpty(_encryptedSeed))
+		{
+			await JS.InvokeVoidAsync("navigator.clipboard.writeText", _encryptedSeed);
+		}
+	}
+
+	private Task Done()
+	{
+		// Clear temporary session storage items and navigate to lists
+		JS.InvokeVoidAsync("sessionStorage.removeItem", "exportPassword");
+		JS.InvokeVoidAsync("sessionStorage.removeItem", "exportUsername");
+		Navigation.NavigateTo("/lists", replace: true);
+		return Task.CompletedTask;
+	}
+}
