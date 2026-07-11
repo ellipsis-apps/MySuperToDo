@@ -557,55 +557,84 @@ public partial class Lists : IAsyncDisposable
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task OnListMembershipReceivedAsync(string listId, string json, string soul)
     {
-        await JSRuntime.InvokeVoidAsync("console.log", $"OnListMembershipReceivedAsync: listId={listId}, soul={soul}, json={json}");
+        // Detailed logging to understand what's happening
+        var jsonIsNull = json == null;
+        var jsonLength = json?.Length ?? 0;
+        var jsonCodes = jsonIsNull ? "NULL" : string.Join(",", json.Take(20).Select(c => (int)c));
 
-        var link = JsonSerializer.Deserialize<ListItemLink>(json);
+        await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### OnListMembershipReceivedAsync START: listId={listId}, soul={soul}, null={jsonIsNull}, len={jsonLength}, codes=[{jsonCodes}]");
 
-        // Check if the item is being removed (empty/null json typically means deletion)
-        if (string.IsNullOrWhiteSpace(json) || link?.ItemId is null)
+        // Check if the item is being removed (empty json means deletion)
+        if (string.IsNullOrWhiteSpace(json))
         {
-            await JSRuntime.InvokeVoidAsync("console.log", $"REMOVAL DETECTED: soul={soul}");
+            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### REMOVAL CODE PATH: Handling deletion");
 
-            // When removing, the soul is the full path like "list-items/{listId}/{itemId}"
-            // Extract the itemId from the soul
-            var parts = soul.Split('/');
-            if (parts.Length >= 3)
+            // When removing via subscribeMap, the soul is just the item ID, not the full path
+            // The listId is already provided as a parameter
+            var itemId = soul; // The soul IS the itemId in this case
+            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Removing itemId={itemId} from listId={listId}");
+
+            if (_itemIdsByListId.TryGetValue(listId, out var itemIds))
             {
-                var itemId = parts[^1]; // Get last part
-                await JSRuntime.InvokeVoidAsync("console.log", $"Removing itemId={itemId} from listId={listId}");
+                var itemsBeforeCount = itemIds.Count;
+                var removed = itemIds.Remove(itemId);
+                var itemsAfterCount = itemIds.Count;
+                await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Item removal: removed={removed}, before={itemsBeforeCount}, after={itemsAfterCount}");
+                await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Remaining itemIds: {string.Join(", ", itemIds)}");
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### ERROR: listId {listId} not in _itemIdsByListId! Available: {string.Join(", ", _itemIdsByListId.Keys)}");
+            }
 
-                if (_itemIdsByListId.TryGetValue(listId, out var itemIds))
-                {
-                    var removed = itemIds.Remove(itemId);
-                    await JSRuntime.InvokeVoidAsync("console.log", $"Item removal result: {removed}, remaining items in list: {itemIds.Count}");
-                }
+            // Force complete tree re-render by setting to null first, then rebuilding
+            _treeData = null;
+            await InvokeAsync(StateHasChanged);
+
+            RebuildTree();
+            await InvokeAsync(StateHasChanged);
+            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### REMOVAL CODE PATH: Complete");
+            return;
+        }
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### NORMAL ADD PATH: Deserializing");
+            var link = JsonSerializer.Deserialize<ListItemLink>(json);
+
+            if (link?.ItemId is null)
+            {
+                // This shouldn't happen with normal GunDB data, but handle it just in case
+                await JSRuntime.InvokeVoidAsync("console.log", $"WARNING: Received null ItemId in link for soul={soul}");
+                return;
+            }
+
+            var itemId2 = link.ItemId;
+            if (string.IsNullOrWhiteSpace(itemId2))
+            {
+                return;
+            }
+
+            await JSRuntime.InvokeVoidAsync("console.log", $"Adding itemId={itemId2} to listId={listId}");
+
+            if (!_itemIdsByListId.TryGetValue(listId, out var itemIdsToAdd))
+            {
+                itemIdsToAdd = [];
+                _itemIdsByListId[listId] = itemIdsToAdd;
+            }
+            itemIdsToAdd.Add(itemId2);
+            if (!_itemSubscriptionsById.Contains(itemId2))
+            {
+                await GunDb.SubscribeAsync($"items/{itemId2}", (itemJson, _) => OnItemReceivedAsync(itemId2, itemJson));
+                _itemSubscriptionsById.Add(itemId2);
             }
             RebuildTree();
             await InvokeAsync(StateHasChanged);
-            return;
         }
-
-        var itemId2 = link.ItemId;
-        if (string.IsNullOrWhiteSpace(itemId2))
+        catch (Exception ex)
         {
-            return;
+            await JSRuntime.InvokeVoidAsync("console.log", $"ERROR in OnListMembershipReceivedAsync: {ex.Message}");
         }
-
-        await JSRuntime.InvokeVoidAsync("console.log", $"Adding itemId={itemId2} to listId={listId}");
-
-        if (!_itemIdsByListId.TryGetValue(listId, out var itemIdsToAdd))
-        {
-            itemIdsToAdd = [];
-            _itemIdsByListId[listId] = itemIdsToAdd;
-        }
-        itemIdsToAdd.Add(itemId2);
-        if (!_itemSubscriptionsById.Contains(itemId2))
-        {
-            await GunDb.SubscribeAsync($"items/{itemId2}", (itemJson, _) => OnItemReceivedAsync(itemId2, itemJson));
-            _itemSubscriptionsById.Add(itemId2);
-        }
-        RebuildTree();
-        await InvokeAsync(StateHasChanged);
     }
 
     /// <summary>
@@ -643,6 +672,7 @@ public partial class Lists : IAsyncDisposable
             SuppressDragIcon = true,
             Children = []  // Root node has children
         };
+
         var nestedListIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var childIds in _childListIdsByParentId.Values)
         {
