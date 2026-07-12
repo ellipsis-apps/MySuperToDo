@@ -20,6 +20,7 @@ Copilot even wrote the JSInterop code to connect Blazor to GunDB. It was pretty 
 
 Run the app here:
 https://ellipsis-apps.github.io/MySuperToDo/
+This uses a "demo" relay that I set up. It is an open relay, so anyone can use it. However, the data is automatically deleted at the end of every month to prevent overages. If you want to use a relay for your own purposes, you will need to set up your own relay, build the app and use your own relay address in the `appsettings.json` file.
 
 ## 📌 Overview
 
