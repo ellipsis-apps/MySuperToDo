@@ -1,5 +1,191 @@
 ﻿@page "/not-found"
 @layout MainLayout
+@inject NavigationManager Navigation
 
-<h3>Not Found</h3>
-<p>Sorry, the content you are looking for does not exist.</p>
+<div class="not-found-container">
+	<div class="not-found-content">
+		<div class="not-found-header">
+			<div class="not-found-code">404</div>
+			<h1 class="not-found-title">Page Not Found</h1>
+			<p class="not-found-description">
+				Sorry, the page you're looking for doesn't exist or has been moved.
+			</p>
+		</div>
+
+		<div class="not-found-actions">
+			<button class="btn btn-primary btn-lg" @onclick="GoHome">
+				<span class="icon">🏠</span> Go to Home
+			</button>
+			<button class="btn btn-outline-secondary btn-lg" @onclick="GoToLists">
+				<span class="icon">📋</span> View My Lists
+			</button>
+			<button class="btn btn-outline-secondary btn-lg" @onclick="GoBack">
+				<span class="icon">↩️</span> Go Back
+			</button>
+		</div>
+
+		<div class="not-found-suggestions">
+			<p class="text-muted small">
+				If you believe this is a mistake, please <a href="https://github.com/ellipsis-apps/MySuperToDo/issues">report it</a>.
+			</p>
+		</div>
+	</div>
+</div>
+
+@code {
+	private void GoHome()
+	{
+		Navigation.NavigateTo("/");
+	}
+
+	private void GoToLists()
+	{
+		Navigation.NavigateTo("/lists");
+	}
+
+	private void GoBack()
+	{
+		Navigation.NavigateTo("javascript:history.back()", forceLoad: false);
+	}
+}
+
+<style>
+	.not-found-container {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		min-height: 100vh;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		padding: 2rem;
+	}
+
+	.not-found-content {
+		background: white;
+		border-radius: 1rem;
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+		padding: 4rem 2rem;
+		max-width: 500px;
+		text-align: center;
+	}
+
+	.not-found-header {
+		margin-bottom: 3rem;
+	}
+
+	.not-found-code {
+		font-size: 8rem;
+		font-weight: 900;
+		color: #667eea;
+		line-height: 1;
+		margin-bottom: 1rem;
+		letter-spacing: 0.1em;
+		text-shadow: 2px 2px 4px rgba(102, 126, 234, 0.1);
+	}
+
+	.not-found-title {
+		font-size: 2rem;
+		font-weight: 700;
+		color: #333;
+		margin-bottom: 1rem;
+	}
+
+	.not-found-description {
+		font-size: 1.1rem;
+		color: #666;
+		line-height: 1.6;
+	}
+
+	.not-found-actions {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		margin-bottom: 2rem;
+	}
+
+	.not-found-actions .btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75rem;
+		font-weight: 600;
+		transition: all 0.3s ease;
+	}
+
+	.not-found-actions .btn:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+	}
+
+	.not-found-actions .btn-primary {
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		border: none;
+		color: white;
+	}
+
+	.not-found-actions .btn-primary:hover {
+		background: linear-gradient(135deg, #5568d3 0%, #663a92 100%);
+		color: white;
+		box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+	}
+
+	.not-found-actions .btn-outline-secondary {
+		border: 2px solid #e0e0e0;
+		color: #333;
+		background: transparent;
+	}
+
+	.not-found-actions .btn-outline-secondary:hover {
+		background: #f5f5f5;
+		border-color: #667eea;
+		color: #667eea;
+	}
+
+	.not-found-actions .icon {
+		font-size: 1.5rem;
+	}
+
+	.not-found-suggestions {
+		border-top: 1px solid #e0e0e0;
+		padding-top: 1.5rem;
+	}
+
+	.not-found-suggestions a {
+		color: #667eea;
+		text-decoration: none;
+		font-weight: 600;
+	}
+
+	.not-found-suggestions a:hover {
+		text-decoration: underline;
+	}
+
+	@@media (max-width: 576px) {
+		.not-found-container {
+			padding: 1rem;
+		}
+
+		.not-found-content {
+			padding: 2rem 1.5rem;
+		}
+
+		.not-found-code {
+			font-size: 5rem;
+		}
+
+		.not-found-title {
+			font-size: 1.5rem;
+		}
+
+		.not-found-description {
+			font-size: 1rem;
+		}
+
+		.not-found-actions {
+			flex-direction: column;
+		}
+
+		.not-found-actions .btn {
+			width: 100%;
+		}
+	}
+</style>
