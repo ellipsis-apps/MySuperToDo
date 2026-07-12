@@ -2,7 +2,6 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.JSInterop
 @using MySuperToDo.Application.Interfaces
 @using MySuperToDo.Domain.Entities
 @using System.Security.Claims
@@ -10,8 +9,6 @@
 @inject IGunDbService GunDb
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
-@inject IJSRuntime JS
-@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 
 <PageTitle>Settings</PageTitle>
 
@@ -54,55 +51,7 @@
                                   Click="@SaveAsync"
                                   IsBusy="@_isSaving"
                                   BusyText="Saving..." />
-                    <RadzenButton Text="Export Keypair"
-                                  Icon="download"
-                                  ButtonStyle="ButtonStyle.Secondary"
-                                  Click="@ExportKeypairAsync"
-                                  IsBusy="@_isExporting"
-                                  Style="margin-left:0.5rem" />
-                    <RadzenButton Text="Import Keypair"
-                                  Icon="upload"
-                                  ButtonStyle="ButtonStyle.Secondary"
-                                  Click="@(() => _showImportArea = !_showImportArea)"
-                                  Style="margin-left:0.5rem" />
                 </RadzenStack>
-
-                @if (_exportedBlob is not null)
-                {
-                    <RadzenText TextStyle="TextStyle.Body2">Encrypted export (copy and store securely):</RadzenText>
-                    <textarea class="form-control" rows="4" readonly>@_exportedBlob</textarea>
-                    @if (_exportedPublicKey is not null)
-                    {
-                        <RadzenText TextStyle="TextStyle.Body2">Public key (verify this matches other browser):</RadzenText>
-                        <input class="form-control" readonly value="@_exportedPublicKey" />
-                    }
-                    @if (_exportedDecrypted is not null)
-                    {
-                        <RadzenText TextStyle="TextStyle.Body2">Decrypted payload (for verification only):</RadzenText>
-                        <textarea class="form-control" rows="4" readonly>@_exportedDecrypted</textarea>
-                        <div class="text-muted" style="font-size:0.9rem">This shows the decrypted keypair payload (pair and alias). Do not share the decrypted content.
-                        </div>
-                    }
-                    <div class="text-muted" style="font-size:0.9rem">Protect this blob and the password used to encrypt it. It can be imported into another browser to restore your identity.</div>
-                }
-
-                @if (_showImportArea)
-                {
-                    <RadzenStack Gap="0.5rem">
-                        <RadzenText TextStyle="TextStyle.Body2">Paste encrypted blob</RadzenText>
-                        <textarea class="form-control" rows="4" @bind="_importBlob"></textarea>
-                        <RadzenText TextStyle="TextStyle.Body2">Password used to encrypt</RadzenText>
-                        <input class="form-control" type="password" @bind="_importPassword" />
-                        <div class="d-flex gap-2">
-                            <RadzenButton Text="Import" Icon="upload" Click="@ImportKeypairAsync" IsBusy="@_isImporting" ButtonStyle="ButtonStyle.Primary" />
-                            <RadzenButton Text="Cancel" Icon="close" Click="@(() => { _showImportArea = false; _importBlob = null; _importPassword = null; })" ButtonStyle="ButtonStyle.Secondary" />
-                        </div>
-                        @if (!string.IsNullOrEmpty(_importStatus))
-                        {
-                            <div class="text-danger">@_importStatus</div>
-                        }
-                    </RadzenStack>
-                }
             </RadzenStack>
         }
     </RadzenStack>

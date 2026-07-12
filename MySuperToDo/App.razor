@@ -1,7 +1,5 @@
 ﻿@using MySuperToDo.Services
-@using MySuperToDo.Application.Interfaces
 @inject NavigationManager Navigation
-@inject IGunDbService GunDbService
 
 <CascadingAuthenticationState>
     @if (!IsInitialized)
@@ -21,7 +19,7 @@
             <Found Context="routeData">
                 <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                     <NotAuthorized>
-                        <UnlockRedirect />
+                        <RedirectToLogin />
                     </NotAuthorized>
                 </AuthorizeRouteView>
                 <FocusOnNavigate RouteData="@routeData" Selector="h1" />
@@ -38,24 +36,12 @@
     {
         try
         {
-            // Perform a reliable runtime check for the app reticle via GunDbService.
-            var gunDbExists = await GunDbService.ReticleExistsAsync();
-            System.Diagnostics.Debug.WriteLine($"[App.razor] gunDbExists = {gunDbExists}");
-
-            if (!gunDbExists)
-            {
-                System.Diagnostics.Debug.WriteLine("[App.razor] No GunDB reticle found, navigating to /database/manage");
-                IsInitialized = true; // render router so manage-database page can show
-                Navigation.NavigateTo("/database/manage", replace: true);
-                return;
-            }
-
-            // If the reticle exists, continue to render the app normally.
+            // Initialize app - authentication and GunDB setup are handled by the auth system
             IsInitialized = true;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[App] Error checking GunDB initialization: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[App] Error during initialization: {ex.Message}");
             IsInitialized = true; // Still initialize app to avoid blocking
         }
         finally
