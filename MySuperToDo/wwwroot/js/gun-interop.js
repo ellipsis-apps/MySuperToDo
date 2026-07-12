@@ -329,7 +329,7 @@ export function initialize(peers, appScope) {
  * Reinitializes the Gun instance with a new peer list while preserving the app reticle.
  */
 export function reinitialize(peers, appScope) {
-    console.debug('[GunInterop] reinitialize peers:', peers);
+    // console.debug('[GunInterop] reinitialize peers:', peers);
     disposeAll();
     initialize(peers, appScope);
 }

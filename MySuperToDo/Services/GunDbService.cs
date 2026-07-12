@@ -89,7 +89,7 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
 
         // Log peer updates for diagnostics
         var peerList = _peers.Length > 0 ? string.Join(", ", _peers) : "(none)";
-        System.Diagnostics.Debug.WriteLine($"[GunDB] UpdatePeersAsync: Peers = {peerList}");
+        // System.Diagnostics.Debug.WriteLine($"[GunDB] UpdatePeersAsync: Peers = {peerList}");
 
         await module.InvokeVoidAsync("reinitialize", cancellationToken, _peers, _appScope);
     }
