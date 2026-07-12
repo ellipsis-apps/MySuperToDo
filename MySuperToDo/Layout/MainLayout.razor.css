@@ -1,5 +1,31 @@
 ::deep .rz-sidebar {
     background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    flex-shrink: 0;
+    overflow-y: auto;
+}
+
+::deep .rz-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+}
+
+::deep .rz-header {
+    flex-shrink: 0;
+    overflow: visible;
+    padding: 0;
+    display: flex;
+    align-items: stretch;
+}
+
+::deep .rz-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 ::deep .rz-header .rz-header-main {
@@ -7,6 +33,12 @@
     align-items: center;
     width: 100%;
     min-width: 0;
+    padding: 0 0.5rem;
+    box-sizing: border-box;
+}
+
+::deep .rz-sidebar-toggle {
+    flex-shrink: 0;
 }
 
 .user-avatar {
