@@ -225,35 +225,35 @@ public partial class Lists : IAsyncDisposable
     {
         try
         {
-            await JSRuntime.InvokeVoidAsync("console.log", "OnDropAsync called", target?.Text ?? "null");
+            ////await JSRuntime.InvokeVoidAsync("console.log", , "OnDropAsync called", target?.Text ?? "null");
 
             if (_dragNode is null)
             {
-                await JSRuntime.InvokeVoidAsync("console.log", "No drag node, returning");
+                ////await JSRuntime.InvokeVoidAsync("console.log", , "No drag node, returning");
                 return;
             }
 
             var source = _dragNode;
             _dragNode = null;
 
-            await JSRuntime.InvokeVoidAsync("console.log", $"Dropping {source.Text} onto {target.Text}");
+            //await JSRuntime.InvokeVoidAsync("console.log", , $"Dropping {source.Text} onto {target.Text}");
 
             if (ReferenceEquals(source, target) || (target.SuppressDragIcon && !string.IsNullOrWhiteSpace(target.Id)))
             {
-                await JSRuntime.InvokeVoidAsync("console.log", "Drop cancelled - same node or invalid target");
+                //await JSRuntime.InvokeVoidAsync("console.log", , "Drop cancelled - same node or invalid target");
                 return;
             }
 
             if (source.IsTodoItem)
             {
-                await JSRuntime.InvokeVoidAsync("console.log", "Item drop - calling HandleItemDropAsync");
+                //await JSRuntime.InvokeVoidAsync("console.log", , "Item drop - calling HandleItemDropAsync");
                 await HandleItemDropAsync(source, target);
                 RebuildTree();
                 await InvokeAsync(StateHasChanged);
             }
             else
             {
-                await JSRuntime.InvokeVoidAsync("console.log", "List drop - calling HandleListDropAsync");
+                //await JSRuntime.InvokeVoidAsync("console.log", , "List drop - calling HandleListDropAsync");
                 await HandleListDropAsync(source, target);
                 RebuildTree();
                 await InvokeAsync(StateHasChanged);
@@ -275,7 +275,7 @@ public partial class Lists : IAsyncDisposable
     {
         try
         {
-            await JSRuntime.InvokeVoidAsync("console.log", "DROP EVENT FIRED - Opening dialog");
+            //await JSRuntime.InvokeVoidAsync("console.log", , "DROP EVENT FIRED - Opening dialog");
 
             var result = await DialogService.OpenAsync<CopyOrMoveDialog>(
                 "Item Action",
@@ -287,7 +287,7 @@ public partial class Lists : IAsyncDisposable
                     Draggable = false
                 });
 
-            await JSRuntime.InvokeVoidAsync("console.log", $"Dialog closed with result: {result}");
+            //await JSRuntime.InvokeVoidAsync("console.log", , $"Dialog closed with result: {result}");
 
             if (result == null)
             {
@@ -322,7 +322,7 @@ public partial class Lists : IAsyncDisposable
     {
         try
         {
-            await JSRuntime.InvokeVoidAsync("console.log", "LIST DROP EVENT FIRED - Opening dialog");
+            //await JSRuntime.InvokeVoidAsync("console.log", , "LIST DROP EVENT FIRED - Opening dialog");
 
             var result = await DialogService.OpenAsync<CopyOrMoveDialog>(
                 "List Action",
@@ -334,7 +334,7 @@ public partial class Lists : IAsyncDisposable
                     Draggable = false
                 });
 
-            await JSRuntime.InvokeVoidAsync("console.log", $"Dialog closed with result: {result}");
+            //await JSRuntime.InvokeVoidAsync("console.log", , $"Dialog closed with result: {result}");
 
             if (result == null)
             {
@@ -562,29 +562,29 @@ public partial class Lists : IAsyncDisposable
         var jsonLength = json?.Length ?? 0;
         var jsonCodes = jsonIsNull ? "NULL" : string.Join(",", json.Take(20).Select(c => (int)c));
 
-        await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### OnListMembershipReceivedAsync START: listId={listId}, soul={soul}, null={jsonIsNull}, len={jsonLength}, codes=[{jsonCodes}]");
+        // //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### OnListMembershipReceivedAsync START: listId={listId}, soul={soul}, null={jsonIsNull}, len={jsonLength}, codes=[{jsonCodes}]");
 
         // Check if the item is being removed (empty json means deletion)
         if (string.IsNullOrWhiteSpace(json))
         {
-            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### REMOVAL CODE PATH: Handling deletion");
+            // //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### REMOVAL CODE PATH: Handling deletion");
 
             // When removing via subscribeMap, the soul is just the item ID, not the full path
             // The listId is already provided as a parameter
             var itemId = soul; // The soul IS the itemId in this case
-            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Removing itemId={itemId} from listId={listId}");
+            // //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### Removing itemId={itemId} from listId={listId}");
 
             if (_itemIdsByListId.TryGetValue(listId, out var itemIds))
             {
                 var itemsBeforeCount = itemIds.Count;
                 var removed = itemIds.Remove(itemId);
                 var itemsAfterCount = itemIds.Count;
-                await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Item removal: removed={removed}, before={itemsBeforeCount}, after={itemsAfterCount}");
-                await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Remaining itemIds: {string.Join(", ", itemIds)}");
+                // //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### Item removal: removed={removed}, before={itemsBeforeCount}, after={itemsAfterCount}");
+                // //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### Remaining itemIds: {string.Join(", ", itemIds)}");
             }
             else
             {
-                await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### ERROR: listId {listId} not in _itemIdsByListId! Available: {string.Join(", ", _itemIdsByListId.Keys)}");
+                // //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### ERROR: listId {listId} not in _itemIdsByListId! Available: {string.Join(", ", _itemIdsByListId.Keys)}");
             }
 
             // Force complete tree re-render by setting to null first, then rebuilding
@@ -593,19 +593,19 @@ public partial class Lists : IAsyncDisposable
 
             RebuildTree();
             await InvokeAsync(StateHasChanged);
-            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### REMOVAL CODE PATH: Complete");
+            // //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### REMOVAL CODE PATH: Complete");
             return;
         }
 
         try
         {
-            await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### NORMAL ADD PATH: Deserializing");
+            //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### NORMAL ADD PATH: Deserializing");
             var link = JsonSerializer.Deserialize<ListItemLink>(json);
 
             if (link?.ItemId is null)
             {
                 // This shouldn't happen with normal GunDB data, but handle it just in case
-                await JSRuntime.InvokeVoidAsync("console.log", $"WARNING: Received null ItemId in link for soul={soul}");
+                //await JSRuntime.InvokeVoidAsync("console.log", , $"WARNING: Received null ItemId in link for soul={soul}");
                 return;
             }
 
@@ -615,7 +615,7 @@ public partial class Lists : IAsyncDisposable
                 return;
             }
 
-            await JSRuntime.InvokeVoidAsync("console.log", $"Adding itemId={itemId2} to listId={listId}");
+            //await JSRuntime.InvokeVoidAsync("console.log", , $"Adding itemId={itemId2} to listId={listId}");
 
             if (!_itemIdsByListId.TryGetValue(listId, out var itemIdsToAdd))
             {
@@ -633,7 +633,7 @@ public partial class Lists : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("console.log", $"ERROR in OnListMembershipReceivedAsync: {ex.Message}");
+            //await JSRuntime.InvokeVoidAsync("console.log", , $"ERROR in OnListMembershipReceivedAsync: {ex.Message}");
         }
     }
 

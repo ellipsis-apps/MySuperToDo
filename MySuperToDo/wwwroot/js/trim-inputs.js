@@ -19,7 +19,7 @@
       }
     } catch (e) {
       // ignore
-      console.debug('trimInputs: failed to trim element', e);
+      // console.debug('trimInputs: failed to trim element', e);
     }
   }
 
@@ -43,7 +43,7 @@
     try {
       trimAllIn(e.target);
     } catch (err) {
-      console.debug('trimInputs: error trimming on submit', err);
+      // console.debug('trimInputs: error trimming on submit', err);
     }
   }, true);
 
