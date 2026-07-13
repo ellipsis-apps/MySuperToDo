@@ -39,6 +39,12 @@
 
 ::deep .rz-sidebar-toggle {
     flex-shrink: 0;
+    /* Ensure toggle is touchable on mobile */
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .user-avatar {
@@ -66,3 +72,42 @@
 ::deep .rz-header .rz-button {
     flex-shrink: 0;
 }
+
+/* Mobile/Tablet responsive: make sidebar offcanvas on small screens */
+@media (max-width: 768px) {
+    ::deep .rz-sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 250px;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+
+    ::deep .rz-sidebar.rz-sidebar-expanded {
+        transform: translateX(0);
+    }
+
+    /* Modal backdrop overlay when sidebar is open */
+    ::deep .rz-sidebar.rz-sidebar-expanded::before {
+        content: '';
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+    }
+
+    ::deep .rz-layout {
+        flex-direction: column;
+    }
+
+    ::deep .rz-body {
+        width: 100%;
+    }
+}
+
