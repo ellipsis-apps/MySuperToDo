@@ -947,7 +947,8 @@ public partial class Lists : IAsyncDisposable
             ]
             :
             [
-                new ContextMenuItem { Text = "Add/Edit a List", Value = "list", Icon = "list" },
+                new ContextMenuItem { Text = "Add a List", Value = "add-list", Icon = "add", Disabled = !isList },
+                new ContextMenuItem { Text = "Edit a List", Value = "edit-list", Icon = "edit" },
                 new ContextMenuItem { Text = "Add/Remove Items From List", Value = "add-remove-existing", Icon = "add", Disabled = !isList },
                 new ContextMenuItem { Text = "Add/Edit new ToDo item", Value = "todo", Icon = "edit" },
                 new ContextMenuItem { Text = "Delete To Do Item", Value = "delete-todo", Icon = "delete", Disabled = !isTodo },
@@ -969,7 +970,10 @@ public partial class Lists : IAsyncDisposable
         }
         switch (args.Value?.ToString())
         {
-            case "list":
+            case "add-list":
+                await OpenAddChildListAsync(_contextNode);
+                break;
+            case "edit-list":
                 await OpenListDetailAsync(_contextNode);
                 break;
             case "add-remove-existing":
@@ -1147,6 +1151,33 @@ public partial class Lists : IAsyncDisposable
             "To Do List Detail",
             parameters,
             new DialogOptions { Width = "420px", ShowClose = true, CloseDialogOnOverlayClick = false });
+    }
+
+    /// <summary>
+    /// Opens the detail dialog for creating a new child list asynchronously.
+    /// After the user creates the list, establishes the parent-child relationship.
+    /// </summary>
+    /// <param name="parentNode">The tree node representing the parent list.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task OpenAddChildListAsync(TreeNode parentNode)
+    {
+        if (parentNode.IsTodoItem || string.IsNullOrWhiteSpace(parentNode.Id))
+        {
+            return;
+        }
+
+        var result = await DialogService.OpenAsync<ToDoListDetail>(
+            "Create New Child List",
+            null,
+            new DialogOptions { Width = "420px", ShowClose = true, CloseDialogOnOverlayClick = false });
+
+        if (result is ToDoList newList)
+        {
+            // Establish parent-child relationship
+            await GunDb.PutAsync($"list-children/{parentNode.Id}/{newList.Id}", new ListChildLink { ChildListId = newList.Id });
+            RebuildTree();
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     /// <summary>

@@ -48,6 +48,7 @@
 										@ondblclick:stopPropagation="true"
 										Style="margin-right: 0.4rem;" />
 						<PriorityIcon Priority="@node.Priority" />
+						<RadzenIcon Icon="check_circle" Style="margin-right: 0.4rem;" />
 						<span style="@(string.IsNullOrEmpty(textColor) ? string.Empty : $"color:{textColor};")">@node.Text</span>
 					}
 					else
@@ -62,6 +63,7 @@
 										Style="margin-right: 0.4rem;" />
 						}
 						<PriorityIcon Priority="@node.Priority" />
+						<RadzenIcon Icon="list" Style="margin-right: 0.4rem;" />
 						<span style="@(string.IsNullOrEmpty(textColor) ? string.Empty : $"color:{textColor};")">@node.Text</span>
 					}
 				</span>
