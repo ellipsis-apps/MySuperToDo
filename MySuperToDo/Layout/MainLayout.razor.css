@@ -37,6 +37,13 @@
     box-sizing: border-box;
 }
 
+/* Ensure the Bootstrap navbar-toggler sits above the sidebar and overlays so it receives clicks */
+::deep .rz-header .navbar-toggler {
+    position: relative;
+    z-index: 1101;
+    pointer-events: auto;
+}
+
 ::deep .rz-sidebar-toggle {
     flex-shrink: 0;
     /* Ensure toggle is touchable on mobile */

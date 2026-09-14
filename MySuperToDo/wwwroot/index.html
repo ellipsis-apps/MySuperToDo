@@ -12,6 +12,8 @@
     <title>MySuperToDo</title>
     <!-- base will be replaced by the build process in github -->
     <base href="/" />
+    <!-- Temporary debug: force visible cursor and enable pointer events to detect CSS/overlay issues on mobile -->
+    <style>html,body,*{cursor:auto!important;pointer-events:auto!important}</style>
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="_content/Radzen.Blazor/css/default.css" />
@@ -45,6 +47,7 @@
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
     <script src="js/backup.js"></script>
     <script src="js/trim-inputs.js"></script>
+    <script src="lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
     <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>
