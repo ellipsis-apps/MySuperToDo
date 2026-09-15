@@ -947,7 +947,8 @@ public partial class Lists : IAsyncDisposable
             ]
             :
             [
-                new ContextMenuItem { Text = "Add a List", Value = "add-list", Icon = "add", Disabled = !isList },
+                // Allow adding a new list when the node is not a ToDo item (this includes the root "All Lists" entry)
+                new ContextMenuItem { Text = "Add a List", Value = "add-list", Icon = "add", Disabled = isTodo },
                 new ContextMenuItem { Text = "Edit a List", Value = "edit-list", Icon = "edit" },
                 new ContextMenuItem { Text = "Add/Remove Items From List", Value = "add-remove-existing", Icon = "add", Disabled = !isList },
                 new ContextMenuItem { Text = "Add/Edit new ToDo item", Value = "todo", Icon = "edit" },
@@ -1161,20 +1162,25 @@ public partial class Lists : IAsyncDisposable
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task OpenAddChildListAsync(TreeNode parentNode)
     {
-        if (parentNode.IsTodoItem || string.IsNullOrWhiteSpace(parentNode.Id))
+        // Only ToDo items cannot have child lists. Allow root (null/empty Id) or existing lists.
+        if (parentNode.IsTodoItem)
         {
             return;
         }
 
         var result = await DialogService.OpenAsync<ToDoListDetail>(
-            "Create New Child List",
+            "Create New List",
             null,
             new DialogOptions { Width = "420px", ShowClose = true, CloseDialogOnOverlayClick = false });
 
         if (result is ToDoList newList)
         {
-            // Establish parent-child relationship
-            await GunDb.PutAsync($"list-children/{parentNode.Id}/{newList.Id}", new ListChildLink { ChildListId = newList.Id });
+            // If a parent id is provided, establish parent-child relationship. If parentNode.Id is empty,
+            // the new list will be a top-level list (root) and no child mapping is required.
+            if (!string.IsNullOrWhiteSpace(parentNode.Id))
+            {
+                await GunDb.PutAsync($"list-children/{parentNode.Id}/{newList.Id}", new ListChildLink { ChildListId = newList.Id });
+            }
             RebuildTree();
             await InvokeAsync(StateHasChanged);
         }
