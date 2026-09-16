@@ -70,6 +70,12 @@ public partial class MainLayout : LayoutComponentBase, IDisposable
         }
     }
 
+    private async Task ToggleSidebar()
+    {
+        sidebarExpanded = !sidebarExpanded;
+        await InvokeAsync(StateHasChanged);
+    }
+
     private async Task<T?> RetryGetAsync<T>(string path, int maxAttempts = 3) where T : class
     {
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
