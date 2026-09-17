@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Radzen.Blazor;
+using Microsoft.JSInterop;
 
 using MySuperToDo.Application.Interfaces;
 
@@ -9,6 +10,7 @@ namespace MySuperToDo.Layout;
 public partial class MainLayout : LayoutComponentBase, IDisposable
 {
     private bool sidebarExpanded = true;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
     private bool _isAuthenticated;
     private bool _hasGunPeers;
     private string _gunPeersTooltip = "GunDB has no peers configured";
@@ -24,6 +26,24 @@ public partial class MainLayout : LayoutComponentBase, IDisposable
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
         ApplyAuthState(state);
         await LoadPeersAsync(state);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Initialize sidebar to expanded only on large screens to avoid the mobile overlay
+                var isLarge = await JS.InvokeAsync<bool>("layoutHelpers.isLargeScreen");
+                sidebarExpanded = isLarge;
+                await InvokeAsync(StateHasChanged);
+            }
+            catch
+            {
+                // If JS interop fails, keep existing default
+            }
+        }
     }
 
     private void OnPeersChanged(IReadOnlyList<string> peerUrls)
