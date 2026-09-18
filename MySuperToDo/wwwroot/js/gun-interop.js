@@ -503,3 +503,38 @@ export function disposeAll() {
     _gun = null;
     _reticle = null;
 }
+
+export async function loginOrRegister(alias, password) {
+    return new Promise((resolve, reject) => {
+        if (!_gun) return reject(new Error('Gun is not initialised'));
+
+        try {
+            _gun.get(`~${alias}`).once(data => {
+                try {
+                    if (data) {
+                        // Account exists → login deterministically
+                        _gun.user().auth(alias, password, ack => {
+                            if (ack && ack.err) reject(new Error(ack.err));
+                            else {
+                                const pub = _gun.user() && _gun.user()._ && _gun.user()._.sea ? _gun.user()._.sea.pub : null;
+                                resolve({ pub, created: false });
+                            }
+                        });
+                    } else {
+                        // Account does not exist → create once
+                        _gun.user().create(alias, password, ack => {
+                            if (ack && ack.err) reject(new Error(ack.err));
+                            else {
+                                const pub = _gun.user() && _gun.user()._ && _gun.user()._.sea ? _gun.user()._.sea.pub : null;
+                                resolve({ pub, created: true });
+                            }
+                        });
+                    }
+                }
+                catch (innerErr) { reject(innerErr); }
+            });
+        }
+        catch (err) { reject(err); }
+    });
+}
+

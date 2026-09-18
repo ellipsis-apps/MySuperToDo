@@ -562,12 +562,13 @@ public partial class Lists : IAsyncDisposable
         var jsonLength = json?.Length ?? 0;
         var jsonCodes = jsonIsNull ? "NULL" : string.Join(",", json.Take(20).Select(c => (int)c));
 
-        // //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### OnListMembershipReceivedAsync START: listId={listId}, soul={soul}, null={jsonIsNull}, len={jsonLength}, codes=[{jsonCodes}]");
+        // Emit a console trace so the browser shows incoming map callbacks
+        try { await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### OnListMembershipReceivedAsync START: listId={listId}, soul={soul}, null={jsonIsNull}, len={jsonLength}, codes=[{jsonCodes}]"); } catch { }
 
         // Check if the item is being removed (empty json means deletion)
         if (string.IsNullOrWhiteSpace(json))
         {
-            // //await JSRuntime.InvokeVoidAsync("console.log", , $"###TRACE### REMOVAL CODE PATH: Handling deletion");
+            try { await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### REMOVAL CODE PATH: listId={listId}, soul={soul}"); } catch { }
 
             // When removing via subscribeMap, the soul is just the item ID, not the full path
             // The listId is already provided as a parameter
@@ -625,6 +626,7 @@ public partial class Lists : IAsyncDisposable
             itemIdsToAdd.Add(itemId2);
             if (!_itemSubscriptionsById.Contains(itemId2))
             {
+                try { await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### Subscribing to item subscription for {itemId2}"); } catch { }
                 await GunDb.SubscribeAsync($"items/{itemId2}", (itemJson, _) => OnItemReceivedAsync(itemId2, itemJson));
                 _itemSubscriptionsById.Add(itemId2);
             }
@@ -644,18 +646,19 @@ public partial class Lists : IAsyncDisposable
     /// <param name="itemId">The ID of the item.</param>
     /// <param name="json">The JSON string representing the ToDo item.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    private Task OnItemReceivedAsync(string itemId, string json)
+    private async Task OnItemReceivedAsync(string itemId, string json)
     {
+        try { await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### OnItemReceivedAsync: itemId={itemId}, jsonNull={(json==null)}, len={(json?.Length ?? 0)}"); } catch { }
+
         var item = JsonSerializer.Deserialize<ToDoItem>(json);
         if (item is null || string.IsNullOrWhiteSpace(item.Title))
         {
-            return Task.CompletedTask;
+            return;
         }
         item.Id = string.IsNullOrWhiteSpace(item.Id) ? itemId : item.Id;
         _itemsById[itemId] = item;
         RebuildTree();
         _ = InvokeAsync(StateHasChanged);
-        return Task.CompletedTask;
     }
 
     /// <summary>

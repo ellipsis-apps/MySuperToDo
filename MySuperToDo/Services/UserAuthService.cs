@@ -48,6 +48,15 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
             existing.LastLoginAt = DateTime.UtcNow;
             existing = await EnsureDefaultListAsync(existing, cancellationToken);
             await gun.PutAsync(UserPath(username), existing, cancellationToken);
+            // Ensure a Gun/SEA account exists locally (or login deterministically)
+            try
+            {
+                await gun.LoginOrRegisterAsync(username, password, cancellationToken);
+            }
+            catch
+            {
+                // Swallow JS interop errors — authentication at the app-level succeeded.
+            }
             return (existing, null, false);
         }
 
@@ -62,6 +71,16 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
 
         newUser = await EnsureDefaultListAsync(newUser, cancellationToken);
         await gun.PutAsync(UserPath(username), newUser, cancellationToken);
+        // Create or login the local Gun/SEA account for this user (best-effort).
+        try
+        {
+            await gun.LoginOrRegisterAsync(username, password, cancellationToken);
+        }
+        catch
+        {
+            // Ignore — user record was created in the app store regardless.
+        }
+
         return (newUser, null, true);
     }
 

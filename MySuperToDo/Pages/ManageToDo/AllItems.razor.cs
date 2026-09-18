@@ -364,6 +364,8 @@ public partial class AllItems : IAsyncDisposable
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task OnListMembershipReceivedAsync(string listId, string json, string soul)
     {
+        try { await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### AllItems.OnListMembershipReceivedAsync START: listId={listId}, soul={soul}, jsonNull={(json==null)}, len={(json?.Length ?? 0)}"); } catch { }
+
         var link = JsonSerializer.Deserialize<ListItemLink>(json);
         var itemId = !string.IsNullOrWhiteSpace(link?.ItemId) ? link!.ItemId : soul;
         if (string.IsNullOrWhiteSpace(itemId))
@@ -378,6 +380,7 @@ public partial class AllItems : IAsyncDisposable
         itemIds.Add(itemId);
         if (!_itemSubscriptionsById.Contains(itemId))
         {
+            try { await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### AllItems subscribing to items/{itemId}"); } catch { }
             await GunDb.SubscribeAsync($"items/{itemId}", (itemJson, _) => OnItemReceivedAsync(itemId, itemJson));
             _itemSubscriptionsById.Add(itemId);
         }
@@ -392,18 +395,19 @@ public partial class AllItems : IAsyncDisposable
     /// <param name="itemId">The ID of the item.</param>
     /// <param name="json">The JSON string representing the ToDo item.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    private Task OnItemReceivedAsync(string itemId, string json)
+    private async Task OnItemReceivedAsync(string itemId, string json)
     {
+        try { await JSRuntime.InvokeVoidAsync("console.log", $"###TRACE### AllItems.OnItemReceivedAsync: itemId={itemId}, jsonNull={(json==null)}, len={(json?.Length ?? 0)}"); } catch { }
+
         var item = JsonSerializer.Deserialize<ToDoItem>(json);
         if (item is null || string.IsNullOrWhiteSpace(item.Title))
         {
-            return Task.CompletedTask;
+            return;
         }
         item.Id = string.IsNullOrWhiteSpace(item.Id) ? itemId : item.Id;
         _itemsById[itemId] = item;
         RebuildTree();
         _ = InvokeAsync(StateHasChanged);
-        return Task.CompletedTask;
     }
 
     /// <summary>

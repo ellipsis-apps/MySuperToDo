@@ -57,4 +57,12 @@ public interface IGunDbService
     /// and returns true when the reticle node is non-null.
     /// </summary>
     Task<bool> ReticleExistsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ensures a Gun/SEA user exists for the provided alias and password, or
+    /// logs in deterministically if the account already exists. Returns the
+    /// user's public key (pub) and a flag indicating whether the account was
+    /// created by this call.
+    /// </summary>
+    Task<(string? Pub, bool Created)> LoginOrRegisterAsync(string alias, string password, CancellationToken cancellationToken = default);
 }

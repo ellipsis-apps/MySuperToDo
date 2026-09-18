@@ -186,6 +186,37 @@ internal sealed class GunDbService : IGunDbService, IAsyncDisposable
         await module.InvokeAsync<bool>("removeAsync", cancellationToken, path);
     }
 
+    public async Task<(string? Pub, bool Created)> LoginOrRegisterAsync(string alias, string password, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(alias)) throw new ArgumentException("alias");
+        if (password is null) throw new ArgumentNullException(nameof(password));
+
+        var module = await GetModuleAsync(cancellationToken);
+
+        try
+        {
+            // The JS function returns an object like { pub: '...', created: true/false }
+            var json = await module.InvokeAsync<JsonElement>("loginOrRegister", cancellationToken, alias, password);
+            string? pub = null;
+            bool created = false;
+
+            if (json.ValueKind == JsonValueKind.Object)
+            {
+                if (json.TryGetProperty("pub", out var p) && p.ValueKind == JsonValueKind.String)
+                    pub = p.GetString();
+                if (json.TryGetProperty("created", out var c) && (c.ValueKind == JsonValueKind.True || c.ValueKind == JsonValueKind.False))
+                    created = c.GetBoolean();
+            }
+
+            return (pub, created);
+        }
+        catch (JSException)
+        {
+            // If the JS interop failed, return null pub and false created — caller may ignore.
+            return (null, false);
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed) return;
