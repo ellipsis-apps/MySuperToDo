@@ -31,12 +31,14 @@ public partial class AllItems : IAsyncDisposable
     private TreeNode? _contextNode;
     private TreeNode? _dragNode;
     private bool _allItemsCompletedCompletesList = true;
+    private bool _deleteCheckedItems = false;
     private List<TreeNode> _treeData =
     [
         new TreeNode { Text = "📋 All Lists", Expanded = true, Children = new List<TreeNode>() }
     ];
     private const string AllItemsListId = "all-items";
     private const string AllItemsListName = "All To Do Items";
+    private const string AllListsRootText = "📋 All Lists";
     private static string ListItemsPath(string listId) => $"list-items/{listId}";
     private static string ListChildrenPath(string listId) => $"list-children/{listId}";
 
@@ -84,6 +86,7 @@ public partial class AllItems : IAsyncDisposable
         if (settings is not null)
         {
             _allItemsCompletedCompletesList = settings.AllItemsCompletedCompletesList;
+            _deleteCheckedItems = settings.DeleteCheckedItems;
         }
     }
 
@@ -496,10 +499,19 @@ public partial class AllItems : IAsyncDisposable
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task OnTodoItemCheckedChangedAsync(TreeNode node, bool isChecked)
     {
+        // Refresh user settings in case they've changed in another view/tab
+        await LoadUserSettingsAsync();
         if (!node.IsTodoItem || string.IsNullOrWhiteSpace(node.Id))
         {
             return;
         }
+        // If user preference is to delete checked items, remove the item instead
+        if (isChecked && _deleteCheckedItems)
+        {
+            await DeleteItemAsync(node.Id);
+            return;
+        }
+
         var targetStatus = isChecked ? ToDoStatus.Completed : ToDoStatus.New;
         if (!_itemsById.TryGetValue(node.Id, out var item))
         {
@@ -525,6 +537,8 @@ public partial class AllItems : IAsyncDisposable
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task OnListCheckedChangedAsync(TreeNode node, bool isChecked)
     {
+        // Refresh user settings in case they've changed in another view/tab
+        await LoadUserSettingsAsync();
         if (node.IsTodoItem || string.IsNullOrWhiteSpace(node.Id))
         {
             return;
@@ -534,6 +548,13 @@ public partial class AllItems : IAsyncDisposable
         {
             return;
         }
+        // If user preference is to delete checked items/lists, remove the list instead
+        if (isChecked && _deleteCheckedItems)
+        {
+            await DeleteListAsync(list.Id);
+            return;
+        }
+
         list.Status = isChecked ? ToDoStatus.Completed : ToDoStatus.New;
         await GunDb.PutAsync($"lists/{list.Id}", list);
         if (isChecked)
@@ -542,6 +563,104 @@ public partial class AllItems : IAsyncDisposable
             await TryAutoCompleteAncestorListsAsync(list.Id);
         }
         node.IsCompleted = isChecked;
+        RebuildTree();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DeleteItemAsync(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId)) return;
+
+        try
+        {
+            // remove the item itself
+            await GunDb.RemoveAsync($"items/{itemId}");
+
+            // remove any list-membership links
+            foreach (var kvp in _itemIdsByListId.ToList())
+            {
+                var listId = kvp.Key;
+                var set = kvp.Value;
+                if (set.Contains(itemId))
+                {
+                    await GunDb.RemoveAsync($"list-items/{listId}/{itemId}");
+                }
+            }
+
+            // unsubscribe and local cleanup
+            if (_itemSubscriptionsById.Contains(itemId))
+            {
+                await GunDb.UnsubscribeAsync($"items/{itemId}");
+                _itemSubscriptionsById.Remove(itemId);
+            }
+            _itemsById.Remove(itemId);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to delete item {itemId}: {ex.Message}");
+        }
+
+        RebuildTree();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DeleteListAsync(string listId)
+    {
+        if (string.IsNullOrWhiteSpace(listId)) return;
+
+        // Protect the special "All To Do Items" root list from deletion
+        if (string.Equals(listId, AllItemsListId, StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine($"Prevented deletion of root list '{listId}'.");
+            return;
+        }
+        // Also protect the UI root node (the "All Lists" root) by name
+        var list = _listsBySoul.Values.FirstOrDefault(l => string.Equals(l.Id, listId, StringComparison.OrdinalIgnoreCase));
+        if (list is not null && string.Equals(list.Name, AllListsRootText, StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine($"Prevented deletion of UI root list '{listId}' (name: {list.Name}).");
+            return;
+        }
+
+        try
+        {
+            // remove the list record
+            await GunDb.RemoveAsync($"lists/{listId}");
+
+            // remove list-items links
+            if (_itemIdsByListId.TryGetValue(listId, out var itemIds))
+            {
+                foreach (var itemId in itemIds.ToList())
+                {
+                    await GunDb.RemoveAsync($"list-items/{listId}/{itemId}");
+                }
+            }
+
+            // remove child links for this list
+            if (_childListIdsByParentId.TryGetValue(listId, out var childListIds))
+            {
+                foreach (var childId in childListIds.ToList())
+                {
+                    await GunDb.RemoveAsync($"list-children/{listId}/{childId}");
+                }
+            }
+
+            // remove references to this list from any parent
+            foreach (var kvp in _childListIdsByParentId.ToList())
+            {
+                var parentId = kvp.Key;
+                var set = kvp.Value;
+                if (set.Contains(listId))
+                {
+                    await GunDb.RemoveAsync($"list-children/{parentId}/{listId}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to delete list {listId}: {ex.Message}");
+        }
+
         RebuildTree();
         await InvokeAsync(StateHasChanged);
     }

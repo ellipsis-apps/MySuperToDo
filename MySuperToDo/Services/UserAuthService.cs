@@ -32,11 +32,40 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
     public async Task<(User? User, string? Error, bool Created)> SignInOrRegisterAsync(
         string username, string password, CancellationToken cancellationToken = default)
     {
-        var existing = await gun.GetOnceAsync<User>(UserPath(username), cancellationToken);
+        // Normalize username to avoid duplicate accounts caused by casing or surrounding whitespace
+        var normalizedUsername = (username ?? string.Empty).Trim().ToLowerInvariant();
+
+        // Best-effort: first perform Gun/SEA login or registration so the user's data
+        // (which may be encrypted) can replicate to this client before we read it.
+        try
+        {
+            await gun.LoginOrRegisterAsync(normalizedUsername, password, cancellationToken);
+        }
+        catch
+        {
+            // ignore interop errors here; we will still attempt to read the user record below
+        }
+
+        // Attempt to read the canonical user record. If replication is slightly delayed,
+        // retry a few times before creating a new user to avoid duplicate records.
+        User? existing = null;
+        const int maxAttempts = 4;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            existing = await gun.GetOnceAsync<User>(UserPath(normalizedUsername), cancellationToken);
+            if (existing is not null)
+                break;
+
+            if (attempt < maxAttempts)
+            {
+                // small backoff to allow peers to replicate
+                try { await Task.Delay(250 * attempt, cancellationToken); } catch { break; }
+            }
+        }
 
         if (existing is not null && IsCorrupted(existing))
         {
-            await CleanupCorruptedUserAsync(username, cancellationToken);
+            await CleanupCorruptedUserAsync(normalizedUsername, cancellationToken);
             existing = null;
         }
 
@@ -47,39 +76,24 @@ internal sealed class UserAuthService(IGunDbService gun, IPasswordHasher passwor
 
             existing.LastLoginAt = DateTime.UtcNow;
             existing = await EnsureDefaultListAsync(existing, cancellationToken);
-            await gun.PutAsync(UserPath(username), existing, cancellationToken);
-            // Ensure a Gun/SEA account exists locally (or login deterministically)
-            try
-            {
-                await gun.LoginOrRegisterAsync(username, password, cancellationToken);
-            }
-            catch
-            {
-                // Swallow JS interop errors — authentication at the app-level succeeded.
-            }
+            // persist using the normalized username key to prevent duplicates
+            await gun.PutAsync(UserPath(normalizedUsername), existing, cancellationToken);
             return (existing, null, false);
         }
 
+        // No canonical user record found after retries — create one deterministically
         var newUser = new User
         {
             Id = Guid.NewGuid().ToString(),
-            Username = username,
+            // store normalized username as the canonical key/username
+            Username = normalizedUsername,
             PasswordHash = passwordHasher.HashPassword(password),
             CreatedAt = DateTime.UtcNow,
             LastLoginAt = DateTime.UtcNow
         };
 
         newUser = await EnsureDefaultListAsync(newUser, cancellationToken);
-        await gun.PutAsync(UserPath(username), newUser, cancellationToken);
-        // Create or login the local Gun/SEA account for this user (best-effort).
-        try
-        {
-            await gun.LoginOrRegisterAsync(username, password, cancellationToken);
-        }
-        catch
-        {
-            // Ignore — user record was created in the app store regardless.
-        }
+        await gun.PutAsync(UserPath(normalizedUsername), newUser, cancellationToken);
 
         return (newUser, null, true);
     }

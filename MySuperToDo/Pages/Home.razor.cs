@@ -25,7 +25,9 @@ public partial class Home
         _errorMessage = string.Empty;
         StateHasChanged();
 
-        var (user, error, created) = await UserAuth.SignInOrRegisterAsync(_model.UserName, _model.Password);
+        // Normalize the username before signing in to match UserAuthService normalization
+        var normalized = (_model.UserName ?? string.Empty).Trim().ToLowerInvariant();
+        var (user, error, created) = await UserAuth.SignInOrRegisterAsync(normalized, _model.Password);
 
         if (error is not null)
         {

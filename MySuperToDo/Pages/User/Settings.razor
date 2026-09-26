@@ -44,6 +44,13 @@
                     <RadzenText TextStyle="TextStyle.Body1">All items completed completes list</RadzenText>
                 </RadzenStack>
 
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <RadzenCheckBox TValue="bool"
+                                    Value="@_settings.DeleteCheckedItems"
+                                    Change="@(value => _settings.DeleteCheckedItems = value)" />
+                    <RadzenText TextStyle="TextStyle.Body1">Delete checked items</RadzenText>
+                </RadzenStack>
+
                 <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
                     <RadzenButton Text="Save"
                                   Icon="save"
